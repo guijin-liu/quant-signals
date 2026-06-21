@@ -1,0 +1,1 @@
+DEPLOY OK v7: Gitee quant-signals repo active. v7 per-stock strategy deployed 2026-06-22. CI weekdays 9:00-15:30 every 30min. PushPlus to WeChat.

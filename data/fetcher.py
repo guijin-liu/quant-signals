@@ -3,6 +3,7 @@
 - 统一缓存管理 (Parquet格式)
 - 重试机制
 - 各数据源协调
+- IPv4强制补丁 (绕过Array VPN IPv6 TAP劫持)
 """
 
 import logging
@@ -13,7 +14,34 @@ from config import CACHE_DIR, CACHE_TTL, STOCK_CODES, STOCK_POOL, TIMEFRAMES
 
 logger = logging.getLogger(__name__)
 
-# ==================== 补丁: 修复东方财富屏蔽Python请求头 ====================
+# ==================== IPv4强制补丁：绕过Array VPN TAP驱动IPv6劫持 ====================
+import socket as _socket
+import urllib3.util.connection as _urllib3_conn
+
+_ORIG_GETADDRINFO = _socket.getaddrinfo
+_ORIG_CREATE_CONNECTION = _urllib3_conn.create_connection
+
+
+def _ipv4_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
+    """强制只用IPv4地址解析，绕过Array TAP虚拟网卡IPv6劫持"""
+    return _ORIG_GETADDRINFO(host, port, _socket.AF_INET, type, proto, flags)
+
+
+def _ipv4_create_connection(address, *args, **kwargs):
+    """强制只建IPv4连接"""
+    host, port = address
+    addrs = _ORIG_GETADDRINFO(host, port, _socket.AF_INET, _socket.SOCK_STREAM)
+    if addrs:
+        return _ORIG_CREATE_CONNECTION((addrs[0][4][0], port), *args, **kwargs)
+    return _ORIG_CREATE_CONNECTION(address, *args, **kwargs)
+
+
+_socket.getaddrinfo = _ipv4_getaddrinfo
+_urllib3_conn.create_connection = _ipv4_create_connection
+logger.info("IPv4强制补丁已激活 (绕过Array VPN TAP IPv6劫持)")
+
+
+# ==================== 补丁: 模拟浏览器请求头(绕过东方财富反爬) ====================
 import requests as _requests
 
 _BROWSER_HEADERS = {
@@ -26,12 +54,13 @@ _BROWSER_HEADERS = {
 
 _original_session_init = _requests.Session.__init__
 
+
 def _patched_session_init(self, *args, **kwargs):
     _original_session_init(self, *args, **kwargs)
     self.headers.update(_BROWSER_HEADERS)
 
+
 _requests.Session.__init__ = _patched_session_init
-# 也更新默认session
 _requests.Session().headers.update(_BROWSER_HEADERS)
 logger.info("已应用浏览器请求头补丁")
 

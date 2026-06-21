@@ -229,8 +229,9 @@ def run_daily_backtest(data: dict = None, years: int = 5):
 
 def _generate_daily_signals(df):
     """
-    日线级别的简化信号生成（基于技术指标的多维共振）
-    不依赖ML模型，仅用规则判断
+    日线级别信号生成（6维框架 + MA增强技术维度）
+    技术维度权重提升，其他维度有数据则参与，无数据则中性
+    目标胜率 > 88%
     """
     import numpy as np
 
@@ -243,19 +244,28 @@ def _generate_daily_signals(df):
         return df
 
     for i in range(max(60, len(df) // 10), len(df)):
-        # === 技术维度 ===
+        # === 维度1：技术指标 (权重0.35) — MA增强版 ===
         tech_bull = 0
 
-        # 均线多头
+        # 均线多头排列 (MA5>MA10>MA20)
         if all(f"ma_{p}" in df.columns for p in [5, 10, 20]):
             if df["ma_5"].iloc[i] > df["ma_10"].iloc[i] > df["ma_20"].iloc[i]:
-                tech_bull += 1
+                tech_bull += 2  # 完全多头，权重×2
+            elif df["ma_5"].iloc[i] > df["ma_10"].iloc[i]:
+                tech_bull += 1  # 短期多头
+            # 有MA60也检查
+            if "ma_60" in df.columns and df["close"].iloc[i] > df["ma_60"].iloc[i]:
+                tech_bull += 1  # 站上MA60长期均线
 
         # MACD金叉
         if "macd_golden_cross" in df.columns and df["macd_golden_cross"].iloc[i]:
             tech_bull += 1
 
-        # RSI健康
+        # MACD柱状图由负转正
+        if "macd_hist_sign_change" in df.columns and df["macd_hist_sign_change"].iloc[i]:
+            tech_bull += 1
+
+        # RSI健康区间
         if "rsi" in df.columns and 40 < df["rsi"].iloc[i] < 70:
             tech_bull += 1
 
@@ -263,32 +273,77 @@ def _generate_daily_signals(df):
         if "volume_surge" in df.columns and df["volume_surge"].iloc[i]:
             tech_bull += 1
 
-        # 不破布林下轨
-        if "boll_pct_b" in df.columns and df["boll_pct_b"].iloc[i] > 0.2:
+        # 价格在布林带中轨上方
+        if "boll_pct_b" in df.columns and df["boll_pct_b"].iloc[i] > 0.4:
             tech_bull += 1
 
-        tech_score = tech_bull / 5.0
+        tech_score = min(tech_bull / 7.0, 1.0)  # 最多7分，归一化到0~1
 
-        # === 趋势维度 ===
+        # === 维度2：趋势/大盘环境 (权重0.15) ===
         trend_bull = 0
-        # 短期涨幅
         if "pct_change_5" in df.columns and df["pct_change_5"].iloc[i] > 0:
             trend_bull += 1
-        # 价格在MA20上
         if "ma_20" in df.columns and df["close"].iloc[i] > df["ma_20"].iloc[i]:
             trend_bull += 1
-        trend_score = trend_bull / 2.0
+        # 如果有大盘数据
+        if "sh_index_trend" in df.columns:
+            trend_bull += (df["sh_index_trend"].iloc[i] > 0)
+        trend_score = trend_bull / 2.0  # 最多2分
 
-        # === 综合 ===
-        composite = 0.5 * tech_score + 0.3 * trend_score + 0.2 * 0.5  # 其他维度默认中性
-        resonance = (tech_bull >= 3) + (trend_bull >= 1)
+        # === 维度3：美股映射 (权重0.10) ===
+        us_score = 0.5  # 默认中性
+        if "us_weighted_return" in df.columns:
+            us_val = df["us_weighted_return"].iloc[i]
+            if not np.isnan(us_val):
+                us_score = 0.5 + us_val * 10  # 映射回报转评分
+                us_score = max(0, min(1, us_score))
+
+        # === 维度4：板块 (权重0.15) ===
+        sector_score = 0.5
+        if "sector_strength_score" in df.columns:
+            sector_score = df["sector_strength_score"].iloc[i]
+
+        # === 维度5：资金流向 (权重0.15) ===
+        flow_score = 0.5
+        if "flow_capital_score" in df.columns:
+            flow_score = df["flow_capital_score"].iloc[i]
+
+        # === 维度6：新闻情绪 (权重0.10) ===
+        news_score = 0.5
+        if "news_sentiment_score" in df.columns:
+            news_score = df["news_sentiment_score"].iloc[i]
+
+        # === 综合打分 (7维 = 6数据维 + MA共振作为一个增强子维度) ===
+        composite = (
+            0.35 * tech_score +
+            0.15 * trend_score +
+            0.10 * us_score +
+            0.15 * sector_score +
+            0.15 * flow_score +
+            0.10 * news_score
+        )
+
+        # 共振维度数
+        resonance = 0
+        if tech_score >= 0.65:
+            resonance += 1
+        if trend_score >= 0.6:
+            resonance += 1
+        if us_score >= 0.6:
+            resonance += 1
+        if sector_score >= 0.6:
+            resonance += 1
+        if flow_score >= 0.6:
+            resonance += 1
+        if news_score >= 0.6:
+            resonance += 1
 
         df.at[df.index[i], "signal_score"] = round(composite, 3)
         df.at[df.index[i], "resonance_count"] = resonance
 
-        if composite > 0.65 and resonance >= 2:
+        if composite > 0.70 and resonance >= 4:
             df.at[df.index[i], "signal"] = "BUY"
-        elif composite < 0.3:
+        elif composite < 0.30:
             df.at[df.index[i], "signal"] = "SELL"
         else:
             df.at[df.index[i], "signal"] = "HOLD"

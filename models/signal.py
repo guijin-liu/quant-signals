@@ -51,32 +51,64 @@ class SignalGenerator:
         """
         scores = pd.DataFrame(index=df.index)
 
-        # === 1. 技术维度 (权重 0.30) ===
+        # === 1. 技术维度 (权重 0.35) — 增强版：MA双周期共振为核心 ===
         tech_score = 0.5  # 基础分
 
-        # 均线多头排列
-        if "ma_bullish" in df.columns:
+        # --- A. MA双周期共振特征 (权重最大的技术子项) ---
+        # ma_entry_score: 由 features/ma_resonance.py 计算，融合5min入场+15min方向
+        if "ma_entry_score" in df.columns:
+            # ma_entry_score 已经是0~1的综合评分，直接加权
+            tech_score += (df["ma_entry_score"] - 0.5) * 0.40  # 偏离中性越多影响越大
+
+        # 5min均线金叉/死叉 (来自MA共振模块)
+        if "ma_golden_cross" in df.columns:
+            tech_score += df["ma_golden_cross"] * 0.20
+        if "ma_dead_cross" in df.columns:
+            tech_score += df["ma_dead_cross"] * (-0.20)
+
+        # 5min均线多头排列
+        if "ma_bullish_5min" in df.columns:
+            tech_score += df["ma_bullish_5min"] * 0.15
+        elif "ma_bullish" in df.columns:
             tech_score += df["ma_bullish"] * 0.15
 
+        if "ma_bearish_5min" in df.columns:
+            tech_score += df["ma_bearish_5min"] * (-0.15)
+
+        # --- B. 15min趋势方向 (MA共振模块提供) ---
+        if "trend_direction" in df.columns:
+            tech_score += (df["trend_direction"] == "bull").astype(float) * 0.12
+            tech_score += (df["trend_direction"] == "bear").astype(float) * (-0.12)
+        elif "trend_score" in df.columns:
+            # trend_score 0~1, 偏离0.5就是方向强度
+            tech_score += (df["trend_score"] - 0.5) * 0.15
+
+        # --- C. 经典技术指标 (辅助确认) ---
         # MACD金叉或柱状图由负转正
         if "macd_golden_cross" in df.columns and "macd_hist_sign_change" in df.columns:
-            tech_score += (df["macd_golden_cross"] | df["macd_hist_sign_change"]) * 0.10
+            tech_score += (df["macd_golden_cross"] | df["macd_hist_sign_change"]) * 0.08
 
         # RSI适中（不超买不超卖，且在上升）
         if "rsi" in df.columns:
-            rsi_ok = ((df["rsi"] > 40) & (df["rsi"] < 70)).astype(float) * 0.05
-            rsi_rising = (df["rsi_rising"] == 1).astype(float) * 0.05
+            rsi_ok = ((df["rsi"] > 40) & (df["rsi"] < 70)).astype(float) * 0.04
+            rsi_rising = (df.get("rsi_rising", pd.Series(0, index=df.index)) == 1).astype(float) * 0.04
             tech_score += rsi_ok + rsi_rising
 
         # 布林带中轨上方
         if "boll_pct_b" in df.columns:
-            tech_score += ((df["boll_pct_b"] > 0.4) & (df["boll_pct_b"] < 0.9)).astype(float) * 0.05
+            tech_score += ((df["boll_pct_b"] > 0.4) & (df["boll_pct_b"] < 0.9)).astype(float) * 0.04
 
         # 量价配合
         if "vol_price_up" in df.columns:
-            tech_score += df["vol_price_up"] * 0.05
+            tech_score += df["vol_price_up"] * 0.04
         if "volume_surge" in df.columns:
-            tech_score += df["volume_surge"] * 0.05
+            tech_score += df["volume_surge"] * 0.04
+
+        # --- D. 均线粘合/发散 (MA共振模块提供) ---
+        if "ma_convergence_5min" in df.columns:
+            # 粘合度高(值小) → 可能变盘，降低方向信心
+            convergence = df["ma_convergence_5min"].fillna(0.1)
+            tech_score += ((convergence < 0.005) & (tech_score > 0.6)).astype(float) * (-0.05)
 
         scores["technical"] = tech_score.clip(0, 1)
 
@@ -124,8 +156,8 @@ class SignalGenerator:
 
         # === 综合打分 ===
         weights = {
-            "technical": 0.30,
-            "market": 0.20,
+            "technical": 0.35,    # 技术维度权重提升（含MA双周期共振）
+            "market": 0.15,
             "us_mapping": 0.10,
             "sector": 0.15,
             "money_flow": 0.15,
