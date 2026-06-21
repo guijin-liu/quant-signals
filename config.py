@@ -109,7 +109,7 @@ TRAIN_PARAMS = {
 
 # ==================== 回测参数 ====================
 BACKTEST_PARAMS = {
-    "initial_capital": 50_000,        # 初始资金5万（可调：1万~5万）
+    "initial_capital": 100_000,       # 初始资金10万
     "commission_rate": 0.0003,      # 佣金 万分之三
     "stamp_tax_rate": 0.001,        # 印花税 千分之一(仅卖出)
     "transfer_fee_rate": 0.00002,   # 过户费 十万分之二
@@ -122,8 +122,8 @@ BACKTEST_PARAMS = {
 
 # ==================== 风控参数 ====================
 RISK_PARAMS = {
-    "stop_loss_pct": 0.02,          # 固定止损 -2%
-    "take_profit_pct": 0.05,        # 固定止盈 +5%
+    "stop_loss_pct": 0.04,          # 固定止损 -4% (v7放宽)
+    "take_profit_pct": 0.12,        # 固定止盈 +12% (v7拉大)
     "trailing_stop_atr": 1.5,       # ATR追踪止损倍数
     "max_daily_loss_pct": 0.05,     # 单日最大亏损5%
     "max_consecutive_losses": 5,    # 连续止损后暂停交易
@@ -134,10 +134,10 @@ RISK_PARAMS = {
 SIGNAL_PARAMS = {
     "ml_weight": 0.5,               # ML模型权重
     "factor_weight": 0.5,           # 多因子规则权重
-    "buy_threshold": 0.75,          # 买入阈值 (综合评分 > 0.75)
+    "buy_threshold": 0.62,          # 买入阈值 (综合评分 > 0.62)
     "sell_threshold": 0.25,         # 卖出阈值 (综合评分 < 0.25)
     "min_confidence": 0.70,         # ML最低置信度
-    "resonance_required": 4,        # 至少N个维度共振才出信号
+    "resonance_required": 1,        # v7降低到1维共振,增加信号量
 }
 
 # ==================== 数据缓存 ====================
