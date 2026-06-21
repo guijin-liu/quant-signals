@@ -1,0 +1,18 @@
+# 量化系统文件
+*.log
+*.csv
+*.xlsx
+*.parquet
+*.feather
+*.pkl
+*.joblib
+__pycache__/
+*.pyc
+data/cache/
+models/saved/*.pkl
+!models/saved/.gitkeep
+reports/
+.env
+push_notify.py
+gm_bridge.py
+live_trader.py

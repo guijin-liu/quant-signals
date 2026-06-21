@@ -1,0 +1,166 @@
+name: 量化信号每日推送
+on:
+  schedule:
+    # 北京时间 9:07 盘前扫描 (UTC 1:07)
+    - cron: '7 1 * * 1-5'
+    # 盘中扫描 9:30-15:00 每30分钟
+    - cron: '37 1 * * 1-5'
+    - cron: '7 2 * * 1-5'
+    - cron: '37 2 * * 1-5'
+    - cron: '7 3 * * 1-5'
+    - cron: '37 3 * * 1-5'
+    - cron: '7 4 * * 1-5'
+    - cron: '37 4 * * 1-5'
+    - cron: '7 5 * * 1-5'
+    - cron: '37 5 * * 1-5'
+    - cron: '7 6 * * 1-5'
+    - cron: '37 6 * * 1-5'
+    - cron: '7 7 * * 1-5'
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install deps
+        run: |
+          pip install pandas numpy scikit-learn matplotlib joblib akshare baostock requests
+
+      - name: Run scan
+        env:
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+        run: |
+          # 写入配置
+          cat > push_notify.py << 'PUSHEOF'
+          import requests, logging, os
+          from datetime import datetime
+          logger = logging.getLogger(__name__)
+          PUSHPLUS_URL = "http://www.pushplus.plus/send"
+          PUSHPLUS_TOKEN = os.environ.get("PUSHPLUS_TOKEN", "")
+          def push_msg(title, content, template="html"):
+              try:
+                  r = requests.post(PUSHPLUS_URL, json={"token":PUSHPLUS_TOKEN,"title":title,"content":content,"template":template}, timeout=10)
+                  result = r.json()
+                  if result.get("code") == 200:
+                      logger.info(f"推送成功: {title}")
+                      return True
+                  logger.error(f"推送失败: {result}")
+                  return False
+              except Exception as e:
+                  logger.error(f"推送异常: {e}")
+                  return False
+          def push_signal_summary(signals):
+              now = datetime.now().strftime("%m-%d %H:%M")
+              rows = ""
+              buy_count = sum(1 for s in signals if s.get("signal")=="BUY")
+              for s in signals:
+                  emoji = {"BUY":"🔴","SELL":"🟢","HOLD":"⚪"}.get(s.get("signal",""),"")
+                  rows += f"<tr><td>{emoji}</td><td><b>{s.get('code','')}</b></td><td>{s.get('name','')}</td><td>{s.get('close',0):.2f}</td><td>{s.get('score',0):.3f}</td><td>{s.get('resonance',0)}/6</td></tr>"
+              content = f"<div style='background:#1a1a2e;color:#eee;padding:15px;border-radius:10px'><h2>📊 量化信号 — {now}</h2><table style='width:100%;color:#eee;border-collapse:collapse'><tr style='border-bottom:1px solid #333'><th></th><th>代码</th><th>名称</th><th>价格</th><th>评分</th><th>共振</th></tr>{rows}</table><p style='margin-top:12px'>买入: <b style='color:#e74c3c'>{buy_count}</b>只 | 目标胜率 >88%</p></div>"
+              return push_msg(f"📊 信号 {'买入'+str(buy_count)+'只' if buy_count>0 else '无可买入'}", content)
+          PUSHEOF
+
+          python -c "
+          import sys, os, logging, json, numpy as np, pandas as pd
+          from datetime import datetime, timedelta
+          logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+          sys.path.insert(0, '.')
+
+          from push_notify import push_signal_summary, push_msg
+          import baostock as bs
+          bs.login()
+
+          STOCKS = {
+              '000933': '神火股份',
+              '002497': '雅化集团',
+              '000960': '锡业股份',
+              '000893': '亚钾国际',
+          }
+
+          def try_fetch(symbol, freq='15', days=30):
+              code = ('sh.' if symbol.startswith(('6','9')) else 'sz.') + symbol
+              end = datetime.now().strftime('%Y-%m-%d')
+              start = (datetime.now() - timedelta(days=days)).strftime('%Y-%m-%d')
+              try:
+                  rs = bs.query_history_k_data_plus(code, 'date,time,open,high,low,close,volume,amount,turn',
+                      start_date=start, end_date=end, frequency=freq, adjustflag='2')
+                  rows = []
+                  while rs.next():
+                      rows.append(rs.get_row_data())
+                  if not rows:
+                      return pd.DataFrame()
+                  cols = ['date','time','code','open','high','low','close','volume','amount','turn']
+                  df = pd.DataFrame(rows, columns=cols)
+                  for c in ['open','high','low','close','volume']:
+                      df[c] = pd.to_numeric(df[c], errors='coerce')
+                  df['datetime'] = pd.to_datetime(df['date'] + ' ' + df['time'].str[:6].str.replace('(\d{2})(\d{2})(\d{2})', r'\1:\2:\3', regex=True) if 'time' in df.columns else df['date'])
+                  df.drop_duplicates('datetime', inplace=True)
+                  df.sort_values('datetime', inplace=True)
+                  df['pct_change'] = df['close'].pct_change() * 100
+                  return df
+              except Exception as e:
+                  print(f'  {symbol} error: {e}')
+                  return pd.DataFrame()
+
+          def score_signal(df):
+              if len(df) < 30:
+                  return {'signal':'HOLD','score':0,'resonance':0}
+              recent = df.tail(30).copy()
+              close = recent['close'].values
+
+              # MA
+              ma5 = np.convolve(close, np.ones(5)/5, 'valid')
+              ma10 = np.convolve(close, np.ones(10)/10, 'valid') if len(close)>=10 else ma5
+              ma_bull = 1 if ma5[-1] > ma10[-1] else 0
+
+              # RSI
+              deltas = np.diff(close[-15:])
+              gain = np.mean(deltas[deltas>0]) if any(deltas>0) else 0
+              loss = -np.mean(deltas[deltas<0]) if any(deltas<0) else 1e-9
+              rsi = 100 - 100/(1+gain/loss) if loss > 0 else 50
+              rsi_ok = 1 if 40 < rsi < 70 else 0
+
+              # Trend
+              pct_5 = (close[-1] - close[-5])/close[-5]*100 if len(close)>=5 else 0
+              trend_ok = 1 if pct_5 > 0 else 0
+
+              # Volume
+              vol_recent = df['volume'].tail(5).mean()
+              vol_avg = df['volume'].tail(20).mean()
+              vol_surge = 1 if vol_recent > vol_avg * 1.3 else 0
+
+              reasons = ma_bull + rsi_ok + trend_ok + vol_surge
+              score = 0.3*ma_bull + 0.2*rsi_ok + 0.25*trend_ok + 0.15*vol_surge + 0.1
+
+              if score > 0.55 and reasons >= 3:
+                  signal = 'BUY'
+              elif score < 0.25:
+                  signal = 'SELL'
+              else:
+                  signal = 'HOLD'
+
+              return {'signal':signal, 'close':round(float(close[-1]),2), 'score':round(score,3), 'resonance':reasons}
+
+          signals = []
+          for code, name in STOCKS.items():
+              print(f'Scanning {code} {name}...')
+              df = try_fetch(code)
+              if df.empty:
+                  s = {'code':code,'name':name,'signal':'HOLD','close':0,'score':0,'resonance':0}
+              else:
+                  s = score_signal(df)
+                  s.update({'code':code,'name':name})
+              signals.append(s)
+              print(f'  -> {s[\"signal\"]} price={s[\"close\"]} score={s[\"score\"]:.3f}')
+
+          push_signal_summary(signals)
+          bs.logout()
+          print('Done!')
+          "
