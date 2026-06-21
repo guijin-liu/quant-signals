@@ -1,0 +1,40 @@
+version: '1.0'
+name: quant-signal-scan
+display-name: '量化信号扫描'
+triggers:
+  schedule:
+    - cron: '0 1 * * 1-5'
+    - cron: '30 1 * * 1-5'
+    - cron: '0 2 * * 1-5'
+    - cron: '30 2 * * 1-5'
+    - cron: '0 3 * * 1-5'
+    - cron: '30 3 * * 1-5'
+    - cron: '0 4 * * 1-5'
+    - cron: '30 4 * * 1-5'
+    - cron: '0 5 * * 1-5'
+    - cron: '30 5 * * 1-5'
+    - cron: '0 6 * * 1-5'
+    - cron: '30 6 * * 1-5'
+    - cron: '0 7 * * 1-5'
+    - cron: '30 7 * * 1-5'
+
+stages:
+  - stage: scan
+    display-name: '扫描信号'
+    jobs:
+      - job: scan
+        display-name: '扫描并推送'
+        steps:
+          - step: checkout@v1
+            display-name: '拉取代码'
+          - step: shell@v1
+            display-name: '安装依赖'
+            inputs:
+              script: |
+                pip install pandas numpy requests -q
+          - step: shell@v1
+            display-name: '执行扫描'
+            inputs:
+              script: |
+                export PUSHPLUS_TOKEN=f3fb5c092ba34785b6857bb45d23d4fa
+                python cloud_function.py
