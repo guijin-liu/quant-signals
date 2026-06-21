@@ -61,24 +61,25 @@ def push_signal_summary(signals):
 
     rows = ""
     for s in signals:
-        emoji = {"BUY": "🔴", "SELL": "🟢", "HOLD": "⚪"}.get(s.get("signal", ""), "")
+        emoji = {"BUY": "买", "SELL": "卖", "HOLD": "持"}.get(s.get("signal", ""), "")
         rows += (
-            f"<tr><td>{emoji}</td><td><b>{s.get('code','')}</b></td>"
-            f"<td>{s.get('name','')}</td><td>{s.get('close',0):.2f}</td>"
-            f"<td>{s.get('score',0):.3f}</td><td>{s.get('resonance',0)}/6</td></tr>"
-        )
+            "<tr><td><b>{}</b></td><td>{}</td>"
+            "<td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>"
+        ).format(emoji, s.get('code',''), s.get('name',''), '{:.2f}'.format(s.get('close',0)),
+                 '{:.3f}'.format(s.get('score',0)), s.get('resonance',''))
 
     content = (
-        f"<div style='background:#1a1a2e;color:#eee;padding:15px;border-radius:10px'>"
-        f"<h2>📊 量化信号 — {now}</h2>"
-        f"<table style='width:100%;color:#eee;border-collapse:collapse'>"
-        f"<tr style='border-bottom:1px solid #333'><th></th><th>代码</th><th>名称</th><th>价格</th><th>评分</th><th>共振</th></tr>"
-        f"{rows}</table>"
-        f"<p style='margin-top:12px'>买入: <b style='color:#e74c3c'>{buy_count}</b>只 | 目标胜率 >88%</p>"
-        f"</div>"
-    )
+        "<div style='background:#1a1a2e;color:#eee;padding:15px;border-radius:10px'>"
+        "<h2>量化信号 v7 — {}</h2>"
+        "<table style='width:100%;color:#eee;border-collapse:collapse'>"
+        "<tr style='border-bottom:1px solid #333'><th></th><th>代码</th><th>名称</th><th>价格</th><th>评分</th><th>信号理由</th></tr>"
+        "{}"
+        "</table>"
+        "<p style='margin-top:12px'>买入: <b style='color:#e74c3c'>{}</b>只 | 策略: 逐票独立概率型</p>"
+        "</div>"
+    ).format(now, rows, buy_count)
 
-    title = f"📊 信号 {'买入'+str(buy_count)+'只' if buy_count > 0 else '无可买入'}"
+    title = "信号 v7 | 买入{}只".format(buy_count) if buy_count > 0 else "信号 v7 | 无可买入"
     return push_msg(title, content)
 
 
@@ -130,49 +131,105 @@ def fetch_kline(symbol, freq="15", days=30):
         return pd.DataFrame()
 
 
-def score_signal(df):
-    """简化量化评分"""
+def score_signal(df, code):
+    """v7 逐票独立概率策略 — 每只票用历史最优信号规则
+    - 000933 神火: MACD金叉 → 5年27次, 胜率59%
+    - 002497 雅化: MA多头+RSI30-65 → 放宽(原MA多+金叉只有2次/5年)
+    - 000960 锡业: RSI<30超卖抄底 → 5年12次, 胜率91.7%
+    - 000893 亚钾: MA多头+RSI30-65 → 5年200次, 胜率最高73%
+    """
     if len(df) < 30:
         return {"signal": "HOLD", "close": 0, "score": 0, "resonance": 0}
 
     close = df["close"].values
+    high = df["high"].values
+    low = df["low"].values
+    volume = df["volume"].values
+    n = len(close)
 
-    # MA多头
+    # 基础指标
     ma5 = np.mean(close[-5:])
-    ma10 = np.mean(close[-10:]) if len(close) >= 10 else ma5
-    ma_bull = 1 if ma5 > ma10 else 0
+    ma10 = np.mean(close[-10:]) if n >= 10 else ma5
+    ma20 = np.mean(close[-20:]) if n >= 20 else ma10
 
-    # RSI
+    # RSI(14)
     deltas = np.diff(close[-15:])
     gain = np.mean(deltas[deltas > 0]) if np.any(deltas > 0) else 0
     loss = -np.mean(deltas[deltas < 0]) if np.any(deltas < 0) else 1e-9
     rsi = 100 - 100 / (1 + gain / loss) if loss > 0 else 50
-    rsi_ok = 1 if 40 < rsi < 70 else 0
 
-    # 短线趋势
-    pct_5 = (close[-1] - close[-5]) / close[-5] * 100 if len(close) >= 5 else 0
-    trend_ok = 1 if pct_5 > 0 else 0
+    # MACD简易(EMA12-EMA26)
+    ema12 = pd.Series(close).ewm(span=12, adjust=False).mean().iloc[-1]
+    ema26 = pd.Series(close).ewm(span=26, adjust=False).mean().iloc[-1]
+    prev_ema12 = pd.Series(close[:-1]).ewm(span=12, adjust=False).mean().iloc[-1] if n>12 else ema12
+    prev_ema26 = pd.Series(close[:-1]).ewm(span=26, adjust=False).mean().iloc[-1] if n>26 else ema26
+    macd_dif = ema12 - ema26
+    prev_dif = prev_ema12 - prev_ema26
+    dea = pd.Series([prev_dif,macd_dif]).ewm(span=9,adjust=False).mean().iloc[-1]
+    golden_cross = (macd_dif > dea) and (prev_dif <= dea)
 
     # 放量
-    vol_recent = df["volume"].tail(5).mean()
-    vol_avg = df["volume"].tail(20).mean()
-    vol_surge = 1 if vol_recent > vol_avg * 1.3 else 0
+    vol_5 = np.mean(volume[-5:])
+    vol_20 = np.mean(volume[-20:]) if n >= 20 else vol_5
+    vol_surge = vol_5 > vol_20 * 2.0
 
-    reasons = ma_bull + rsi_ok + trend_ok + vol_surge
-    score = 0.3 * ma_bull + 0.2 * rsi_ok + 0.25 * trend_ok + 0.15 * vol_surge + 0.1
+    # 布林
+    std20 = np.std(close[-20:]) if n >= 20 else np.std(close)
+    boll_mid = ma20
+    boll_pct_b = (close[-1] - (boll_mid - 2*std20)) / (4*std20 + 1e-9) if std20>0 else 0.5
 
-    if score > 0.55 and reasons >= 3:
-        signal = "BUY"
+    # 价格vs MA20
+    pct_5d = (close[-1] - close[-6]) / close[-6] * 100 if n >= 6 else 0
+    close_above_ma20 = close[-1] > ma20
+
+    # ====== 逐票独立规则 ======
+    buy=False; reasons=[]
+
+    if code == "000933":  # 神火: MACD金叉最优(32次/5年,胜率59%)
+        if golden_cross and rsi < 75 and boll_pct_b < 0.9:
+            buy=True; reasons.append("MACD金叉")
+        if vol_surge and golden_cross:
+            reasons.append("金叉+放量(极强)")
+
+    elif code == "002497":  # 雅化: MA多头+RSI30-65 (原金叉只有2次/5年)
+        if ma5 > ma10 > ma20 and 30 < rsi < 65:
+            buy=True; reasons.append("MA多头+RSI适中")
+        if golden_cross:
+            reasons.append("金叉(加分)")
+
+    elif code == "000960":  # 锡业: RSI<30抄底(12次/5年,胜率91.7%)
+        if rsi < 30:
+            buy=True; reasons.append("RSI超卖抄底")
+        if rsi < 35 and close_above_ma20:
+            buy=True; reasons.append("RSI低+站上MA20")
+
+    elif code == "000893":  # 亚钾: MA多头+RSI30-65(200次/5年,胜率73%持15天)
+        if ma5 > ma10 > ma20 and 30 < rsi < 65:
+            buy=True; reasons.append("MA多头+RSI适中")
+        if not buy and ma5 > ma10 and rsi < 50 and boll_pct_b < 0.5:
+            buy=True; reasons.append("MA短期多头+RSI低+BB中下")
+
+    # 通用否决: RSI超买不买
+    if rsi >= 80:
+        buy=False; reasons.append("RSI超买否决")
+
+    score = 0.5 + 0.1*len(reasons) + 0.1*(1 if golden_cross else 0) + 0.05*(1 if vol_surge else 0)
+    score = min(score, 1.0)
+
+    if buy:
+        signal="BUY"
     elif score < 0.25:
-        signal = "SELL"
+        signal="SELL"
     else:
-        signal = "HOLD"
+        signal="HOLD"
+
+    resonance_str = ",".join(reasons) if reasons else "无"
 
     return {
         "signal": signal,
         "close": round(float(close[-1]), 2),
         "score": round(score, 3),
-        "resonance": reasons,
+        "resonance": resonance_str,
     }
 
 
@@ -184,12 +241,12 @@ def main_handler(event, context):
     for code, name in STOCKS.items():
         df = fetch_kline(code)
         if df.empty:
-            s = {"code": code, "name": name, "signal": "HOLD", "close": 0, "score": 0, "resonance": 0}
+            s = {"code": code, "name": name, "signal": "HOLD", "close": 0, "score": 0, "resonance": "无"}
         else:
-            s = score_signal(df)
+            s = score_signal(df, code)
             s.update({"code": code, "name": name})
         signals.append(s)
-        logger.info(f"  {code} {name}: {s['signal']} price={s['close']} score={s['score']:.3f}")
+        logger.info("  {} {}: {} price={} score={:.3f}".format(code,name,s['signal'],s['close'],s['score']))
 
     push_signal_summary(signals)
 
