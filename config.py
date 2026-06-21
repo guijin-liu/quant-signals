@@ -109,21 +109,21 @@ TRAIN_PARAMS = {
 
 # ==================== 回测参数 ====================
 BACKTEST_PARAMS = {
-    "initial_capital": 100_000,       # 初始资金10万
+    "initial_capital": 100_000,       # 初始资金10万 (v7)
     "commission_rate": 0.0003,      # 佣金 万分之三
     "stamp_tax_rate": 0.001,        # 印花税 千分之一(仅卖出)
     "transfer_fee_rate": 0.00002,   # 过户费 十万分之二
     "slippage": 0.001,              # 滑点 千分之一
-    "min_hold_bars": 3,             # 最短持有K线数 (T+1约束 + 最小持仓)
-    "position_pct": 0.25,           # 单只股票仓位比例
+    "min_hold_bars": 3,             # 最短持有K线数
+    "position_pct": 0.20,           # 单只股票仓位比例 (v7:每人20%)
     "max_positions": 4,             # 最大同时持仓数
     "max_daily_trades": 6,          # 单日最大交易次数
 }
 
 # ==================== 风控参数 ====================
 RISK_PARAMS = {
-    "stop_loss_pct": 0.04,          # 固定止损 -4% (v7放宽)
-    "take_profit_pct": 0.12,        # 固定止盈 +12% (v7拉大)
+    "stop_loss_pct": 0.05,          # 固定止损 -5% (v7: A股日波动大)
+    "take_profit_pct": 0.15,        # 固定止盈 +15% (v7: 大波段)
     "trailing_stop_atr": 1.5,       # ATR追踪止损倍数
     "max_daily_loss_pct": 0.05,     # 单日最大亏损5%
     "max_consecutive_losses": 5,    # 连续止损后暂停交易
