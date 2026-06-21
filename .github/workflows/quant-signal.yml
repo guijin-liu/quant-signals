@@ -37,7 +37,9 @@ jobs:
         env:
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
         run: |
-          # 写入配置
+          # 用 stock_pool.py 作为股票池配置来源
+          # 要加股票：编辑 stock_pool.py 加一行
+          # 要减股票：编辑 stock_pool.py 删一行
           cat > push_notify.py << 'PUSHEOF'
           import requests, logging, os
           from datetime import datetime
@@ -77,12 +79,9 @@ jobs:
           import baostock as bs
           bs.login()
 
-          STOCKS = {
-              '000933': '神火股份',
-              '002497': '雅化集团',
-              '000960': '锡业股份',
-              '000893': '亚钾国际',
-          }
+          # 从 stock_pool.py 读股票池（要加减股票只改那个文件）
+          from stock_pool import STOCK_POOL
+          STOCKS = {code: info['name'] for code, info in STOCK_POOL.items()}
 
           def try_fetch(symbol, freq='15', days=30):
               code = ('sh.' if symbol.startswith(('6','9')) else 'sz.') + symbol
