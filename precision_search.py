@@ -7,7 +7,9 @@ import baostock as bs
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-import json, os
+import json, os, sys
+
+sys.stdout.reconfigure(encoding='utf-8')
 
 bs.login()
 CACHE = "C:/Users/Administrator/quant_trading/data/cache"
