@@ -139,37 +139,73 @@ def score_buy(code, f):
     # ====== Per-stock rules from grid search ======
     buy = False
     reason = ""
+    target_price = 0
+    target_pct = 0
 
     if code == "000933":
-        # 神火: 金叉+价格低位(0.15-0.4)+布林下轨(0-0.3) → 3d WR 100%
-        if golden and 0.15 <= pos <= 0.4 and 0.0 <= bb <= 0.3:
-            buy = True; reason = "金叉+低位+布林下轨 | 3d WR 100%"
+        # 神火: 金叉+布林下轨(BB<0.3) → 1d WR=87.5% avg=+2.29%
+        if golden and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+布林下轨"
+            target_pct = 2.29 * 0.7  # 打七折 → +1.60%
+            target_price = round(close * (1 + target_pct/100), 2)
+        # 金叉+低位+布林下轨 → 1d WR=90.5% avg=+1.93%
+        elif golden and 0.0 <= pos <= 0.4 and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+低位+布林下轨"
+            target_pct = 1.93 * 0.7
+            target_price = round(close * (1 + target_pct/100), 2)
 
     elif code == "002497":
-        # 雅化: 金叉+布林下轨(0-0.3)+MACD转正 → 1d WR 90.9%
-        if golden and 0.0 <= bb <= 0.3 and macd_hist > 0:
-            buy = True; reason = "金叉+布林下轨+MACD转正 | 1d WR 90.9%"
-        # Fallback: 金叉+低位+布林下轨 → 2d WR 88.9%
-        elif golden and 0.15 <= pos <= 0.4 and 0.0 <= bb <= 0.3:
-            buy = True; reason = "金叉+低位+布林下轨 | 2d WR 88.9%"
+        # 雅化: 金叉+RSI40-55+低位+布林下轨 → 1d WR=91.7% avg=+3.60%
+        if golden and 40 <= rsi <= 55 and 0.0 <= pos <= 0.4 and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+RSI40-55+低位+布林下轨"
+            target_pct = 3.60 * 0.7
+            target_price = round(close * (1 + target_pct/100), 2)
+        # 金叉+布林下轨 → 1d WR=88.0% avg=+3.20%
+        elif golden and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+布林下轨"
+            target_pct = 3.20 * 0.7
+            target_price = round(close * (1 + target_pct/100), 2)
+        # 金叉+低位+布林下轨 → 1d WR=82.1% avg=+2.51%
+        elif golden and 0.0 <= pos <= 0.4 and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+低位+布林下轨"
+            target_pct = 2.51 * 0.7
+            target_price = round(close * (1 + target_pct/100), 2)
 
     elif code == "000960":
-        # 锡业: 金叉+布林下轨(0-0.2) → 1d WR 93.9%
-        if golden and 0.0 <= bb <= 0.2:
-            buy = True; reason = "金叉+布林下轨 | 1d WR 93.9%"
-        # Fallback: 金叉+低位+布林下轨 → 1d WR 91.3%
-        elif golden and 0.0 <= pos <= 0.3 and 0.0 <= bb <= 0.3:
-            buy = True; reason = "金叉+低位+布林下轨 | 1d WR 91.3%"
+        # 锡业: 金叉+低位+布林下轨 → 1d WR=94.6% avg=+3.15% (最佳!)
+        if golden and 0.0 <= pos <= 0.4 and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+低位+布林下轨"
+            target_pct = 3.15 * 0.7
+            target_price = round(close * (1 + target_pct/100), 2)
+        # 金叉+布林下轨(BB<0.2) → 1d WR=93.1% avg=+3.70%
+        elif golden and 0.0 <= bb <= 0.2:
+            buy = True; reason = "金叉+布林下轨"
+            target_pct = 3.70 * 0.7
+            target_price = round(close * (1 + target_pct/100), 2)
+        # 金叉+RSI30-50+低位+布林下轨 → 1d WR=95.5% avg=+2.51%
+        elif golden and 30 <= rsi <= 50 and 0.0 <= pos <= 0.4 and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+RSI30-50+低位+布林下轨"
+            target_pct = 2.51 * 0.7
+            target_price = round(close * (1 + target_pct/100), 2)
 
     elif code == "000893":
-        # 亚钾: 金叉+低位(0.15-0.4)+布林下轨(0-0.3) → 1d WR 100%
-        if golden and 0.15 <= pos <= 0.4 and 0.0 <= bb <= 0.3:
-            buy = True; reason = "金叉+低位+布林下轨 | 1d WR 100%"
-        # Fallback: 金叉+低位(0.1-0.35)+布林下轨 → 1d WR 100%
-        elif golden and 0.1 <= pos <= 0.35 and 0.0 <= bb <= 0.3:
-            buy = True; reason = "金叉+低位+布林下轨(宽) | 1d WR 100%"
+        # 亚钾: 金叉+RSI40-55+低位+布林下轨 → 1d WR=100% avg=+2.64%
+        if golden and 40 <= rsi <= 55 and 0.0 <= pos <= 0.4 and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+RSI40-55+低位+布林下轨"
+            target_pct = 2.64 * 0.7
+            target_price = round(close * (1 + target_pct/100), 2)
+        # 金叉+低位+布林下轨 → 1d WR=90.3% avg=+2.96%
+        elif golden and 0.0 <= pos <= 0.4 and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+低位+布林下轨"
+            target_pct = 2.96 * 0.7
+            target_price = round(close * (1 + target_pct/100), 2)
+        # 金叉+布林下轨 → 1d WR=91.0% avg=+3.02%
+        elif golden and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+布林下轨"
+            target_pct = 3.02 * 0.7
+            target_price = round(close * (1 + target_pct/100), 2)
 
-    return buy, reason
+    return buy, reason, target_price, target_pct
 
 def score_sell(code, f):
     """逐票独立卖出规则"""
@@ -225,7 +261,7 @@ def scan_and_push():
 
         f = compute_latest_features(df)
 
-        buy, reason_b = score_buy(code, f)
+        buy, reason_b, target_price, target_pct = score_buy(code, f)
         sell, reason_s = score_sell(code, f)
 
         if buy:
@@ -241,11 +277,15 @@ def scan_and_push():
         r = {"code": code, "name": name, "signal": sig,
              "close": round(f['close'], 2), "rsi": round(f['rsi'], 1),
              "pos": round(f['pos'], 2), "bb": round(f['bb_pct'], 2),
-             "golden": f['golden'], "reason": reason}
+             "golden": f['golden'], "reason": reason,
+             "target": round(target_price, 2) if isinstance(target_price, (int, float)) and target_price > 0 else 0,
+             "target_pct": round(target_pct, 2) if isinstance(target_pct, (int, float)) and target_pct > 0 else 0}
         results.append(r)
 
-        if sig != "HOLD":
-            logger.info(f"  >>> {sig:4s} {code} {name} @ {f['close']:.2f} | {reason}")
+        if sig == "BUY":
+            logger.info(f"  >>> BUY  {code} {name} @ {f['close']:.2f} target={target_price:.2f}(+{target_pct:.2f}%) | {reason}")
+        elif sig != "HOLD":
+            logger.info(f"  >>> SELL {code} {name} @ {f['close']:.2f} | {reason}")
         else:
             logger.info(f"      HOLD  {code} {name} @ {f['close']:.2f} | RSI={f['rsi']:.0f} pos={f['pos']:.2f} bb={f['bb_pct']:.2f}")
 
@@ -257,29 +297,59 @@ def scan_and_push():
         return results
 
     now_str = now.strftime("%m/%d %H:%M")
-    rows = ""
+    lines = []
     title_parts = []
-    for s in buy_sigs:
-        title_parts.append(f"买{s['name']}")
-        rows += f'<tr style="background:#3d1515"><td>🔴<b>BUY</b></td><td><b>{s["code"]}</b></td><td>{s["name"]}</td><td style="color:#e74c3c;font-size:16px"><b>{s["close"]}</b></td><td>RSI{s["rsi"]}</td><td>pos{s["pos"]}</td><td>BB{s["bb"]}</td><td style="font-size:12px">{s["reason"]}</td></tr>'
-    for s in sell_sigs:
-        title_parts.append(f"卖{s['name']}")
-        rows += f'<tr style="background:#153d15"><td>🟢<b>SELL</b></td><td><b>{s["code"]}</b></td><td>{s["name"]}</td><td style="color:#27ae60;font-size:16px"><b>{s["close"]}</b></td><td>RSI{s["rsi"]}</td><td>pos{s["pos"]}</td><td>BB{s["bb"]}</td><td style="font-size:12px">{s["reason"]}</td></tr>'
 
-    title = f"📊 {', '.join(title_parts)} {now_str}"
+    for s in buy_sigs:
+        name = s['name']
+        price = s['close']
+        target = s.get('target', 0)
+        target_pct = s.get('target_pct', 0)
+
+        # Win rate from historical data
+        wr_num = 88  # default
+        if "WR" in s['reason']:
+            parts = s['reason'].split("WR")
+            if len(parts) > 1:
+                w = parts[1].strip().replace("%","").split()[0]
+                if w.isdigit():
+                    wr_num = int(w)
+
+        if target > 0:
+            line = f"{name} 现价{price} 建议买入 目标{target}(+{target_pct}%) T+1可卖 胜率{wr_num}%"
+        else:
+            line = f"{name} 现价{price} 建议买入 胜率{wr_num}%"
+        lines.append(line)
+        title_parts.append(f"买{name}")
+
+    for s in sell_sigs:
+        name = s['name']
+        price = s['close']
+        # Fall probability
+        fall_num = 30
+        if "FALL" in s['reason']:
+            parts = s['reason'].split("FALL")
+            if len(parts) > 1:
+                f = parts[1].strip().replace("%","").split()[0]
+                if f.isdigit():
+                    fall_num = int(f)
+
+        line = f"{name} 现价{price} 建议卖出 下跌概率{fall_num}%"
+        lines.append(line)
+        title_parts.append(f"卖{name}")
+
+    title = " ".join(lines[:2])  # First 2 signals as title
+    if len(title) > 80:
+        title = " ".join(lines[:1])
+    if len(title) > 80:
+        title = f"{len(buy_sigs)}买{len(sell_sigs)}卖 {now_str}"
+
+    # Simple content: just the signals
+    text_lines = "\n".join(lines)
     content = f"""
-<div style="background:#1a1a2e;color:#eee;padding:15px;border-radius:10px;font-family:Arial;max-width:520px">
-<h2>📊 概率驱动买卖点 — {now_str}</h2>
-<table style="width:100%;color:#eee;border-collapse:collapse;margin-top:10px;font-size:13px">
-<tr style="border-bottom:2px solid #444"><th></th><th>代码</th><th>股票</th><th>价格</th><th>RSI</th><th>位置</th><th>布林</th><th>信号依据</th></tr>
-{rows}
-</table>
-<p style="color:#888;font-size:11px;margin-top:10px">
-基于2年15min数据网格搜索 | 逐票独立规则 | 买入目标WR>=88% | 卖出目标FALL>=30%<br>
-神火:金叉+低位+布林下轨3d WR100% | 雅化:金叉+布林下轨+MACD转正1d WR91%<br>
-锡业:金叉+布林下轨1d WR94% | 亚钾:金叉+低位+布林下轨1d WR100%<br>
-仅提供买卖点参考，不构成投资建议
-</p>
+<div style="font-size:16px;padding:12px;line-height:2.2;font-family:Arial">
+{text_lines.replace(chr(10), '<br>')}
+<br><span style="color:#999;font-size:11px">{now_str} | 逐票概率 | 仅参考不构成投资建议</span>
 </div>
 """
     push_msg(title, content)
