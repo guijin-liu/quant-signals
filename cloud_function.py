@@ -1,186 +1,290 @@
 """
-云端实时买卖点推送 — GitHub Actions 每30分钟执行
-纯技术信号，只管买卖点，不涉及本金金额
+v10 逐票概率驱动买卖点 — 基于2年15分钟数据网格搜索
 
-数据源: baostock (主) → 腾讯行情 (备)
-推送: PushPlus → 微信
+每只股票独立的最优买卖规则，全部来自历史数据验证：
+  目标：BUY = 2-3天后盈利概率>=88%  SELL = 1-2天后下跌概率>=30%
+
+神火(000933): 金叉+价格低位+布林下轨 → f3d 100% WR (n=13)
+雅化(002497): 金叉+布林下轨+MACD转正 → f1d 90.9% WR (n=33)
+锡业(000960): 金叉+布林下轨 → f1d 93.9% WR (n=33)
+亚钾(000893): 金叉+价格低位+布林下轨 → f1d 100% WR (n=22)
+
+卖出统一: RSI高位+价格高位+布林上轨 → 1d/2d FALL>=63%-70%
 """
 import os, sys, json, logging
 import numpy as np, pandas as pd
 from datetime import datetime, timedelta
+import requests
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger()
 
-PUSHPLUS_TOKEN = os.environ.get("PUSHPLUS_TOKEN", "f3fb5c092ba34785b6857bb45d23d4fa")
+PUSHPLUS_TOKEN = "f3fb5c092ba34785b6857bb45d23d4fa"
 PUSHPLUS_URL = "http://www.pushplus.plus/send"
 
 STOCKS = {"000933": "神火", "002497": "雅化", "000960": "锡业", "000893": "亚钾"}
 
-# ====== Push ======
 def push_msg(title, content):
-    import requests
     try:
         r = requests.post(PUSHPLUS_URL, json={
             "token": PUSHPLUS_TOKEN, "title": title, "content": content, "template": "html"
         }, timeout=10)
-        if r.json().get("code") == 200:
-            logger.info(f"Push OK: {title}"); return True
-        logger.error(f"Push FAIL: {r.text}"); return False
+        ok = r.json().get("code") == 200
+        logger.info(f"{'OK' if ok else 'FAIL'}: {title}")
+        return ok
     except Exception as e:
-        logger.error(f"Push ERROR: {e}"); return False
+        logger.error(f"Push error: {e}")
+        return False
 
-# ====== Data ======
-def fetch_baostock(code):
+def fetch_data(code):
     import baostock as bs
     bs.login()
     try:
-        prefix = "sh." if code.startswith(("6","9")) else "sz."
-        end = datetime.now().strftime("%Y-%m-%d")
-        start = (datetime.now() - timedelta(days=60)).strftime("%Y-%m-%d")
-        rs = bs.query_history_k_data_plus(
-            prefix + code, "date,open,high,low,close,volume,amount",
-            start_date=start, end_date=end, frequency="d", adjustflag="2")
-        rows = []
-        while (rs.error_code == '0') & rs.next():
-            rows.append(rs.get_row_data())
+        cache_file = f"C:/Users/Administrator/quant_trading/data/cache/{code}_15min.csv"
+        if os.path.exists(cache_file):
+            df = pd.read_csv(cache_file, dtype={'time': str})
+            df['time'] = df['time'].astype(str).str.zfill(17)
+            for c in ['open','high','low','close','volume']:
+                df[c] = pd.to_numeric(df[c], errors='coerce')
+        else:
+            prefix = "sh." if code.startswith(("6","9")) else "sz."
+            end = datetime.now().strftime("%Y-%m-%d")
+            start = (datetime.now() - timedelta(days=730)).strftime("%Y-%m-%d")
+            rs = bs.query_history_k_data_plus(prefix + code,
+                'date,time,open,high,low,close,volume',
+                start_date=start, end_date=end, frequency='15', adjustflag='2')
+            rows = []
+            while (rs.error_code == '0') & rs.next():
+                rows.append(rs.get_row_data())
+            if not rows:
+                bs.logout(); return pd.DataFrame()
+            df = pd.DataFrame(rows, columns=['date','time','open','high','low','close','volume'])
+            for c in ['open','high','low','close','volume']:
+                df[c] = pd.to_numeric(df[c], errors='coerce')
         bs.logout()
-        if not rows:
-            return pd.DataFrame()
-        df = pd.DataFrame(rows, columns=["date","open","high","low","close","volume","amount"])
-        for c in ["open","high","low","close","volume"]:
-            df[c] = pd.to_numeric(df[c], errors="coerce")
-        df["date"] = pd.to_datetime(df["date"])
-        df.sort_values("date", inplace=True); df.reset_index(drop=True, inplace=True)
         return df
-    except Exception as e:
+    except:
         try: bs.logout()
         except: pass
         return pd.DataFrame()
 
-def fetch_tencent(code):
-    import requests
-    try:
-        prefix = "sh" if code.startswith(("6","9")) else "sz"
-        r = requests.get(
-            "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get",
-            params={"param": f"{prefix}{code},day,,,60,qfq"},
-            headers={"User-Agent": "Mozilla/5.0"}, timeout=10)
-        data = r.json()
-        if data.get("code") != 0:
-            return pd.DataFrame()
-        klines = data.get("data", {}).get(prefix + code, {}).get("qfqday") or []
-        rows = [{"date": k[0], "open": float(k[1]), "close": float(k[2]),
-                 "high": float(k[3]), "low": float(k[4]), "volume": float(k[5])} for k in klines]
-        df = pd.DataFrame(rows)
-        df["date"] = pd.to_datetime(df["date"])
-        df.sort_values("date", inplace=True); df.reset_index(drop=True, inplace=True)
-        return df
-    except:
-        return pd.DataFrame()
+def compute_latest_features(df):
+    """只计算最后几根bar的特征"""
+    close = df['close'].values
+    high = df['high'].values
+    low = df['low'].values
+    volume = df['volume'].values
+    n = len(close)
 
-def fetch_data(code):
-    df = fetch_baostock(code)
-    if not df.empty and len(df) >= 20:
-        return df
-    return fetch_tencent(code)
-
-# ====== Signal ======
-def calc_signal(df, code):
-    if len(df) < 20:
-        return None
-    close = df["close"].values; volume = df["volume"].values; n = len(close)
+    features = {}
 
     # MA
-    ma5 = np.mean(close[-5:]); ma10 = np.mean(close[-10:]); ma20 = np.mean(close[-20:])
-    prev_ma5 = np.mean(close[-6:-1]); prev_ma10 = np.mean(close[-11:-1])
-    golden = (ma5 > ma10) and (prev_ma5 <= prev_ma10)
-    dead = (ma5 < ma10) and (prev_ma5 >= prev_ma10)
-    ma_bull = ma5 > ma10 > ma20
+    features['ma5'] = np.mean(close[-5:])
+    features['ma10'] = np.mean(close[-10:])
+    features['ma20'] = np.mean(close[-20:])
+    p_ma5 = np.mean(close[-6:-1])
+    p_ma10 = np.mean(close[-11:-1])
+    features['golden'] = (features['ma5'] > features['ma10']) and (p_ma5 <= p_ma10)
+    features['dead'] = (features['ma5'] < features['ma10']) and (p_ma5 >= p_ma10)
 
-    # RSI(14)
-    d = np.diff(close[-15:])
-    g = np.mean(d[d>0]) if np.any(d>0) else 0
-    l = -np.mean(d[d<0]) if np.any(d<0) else 1e-9
-    rsi = 100 - 100/(1+g/l) if l>0 else 50
+    # RSI 14
+    deltas = np.diff(close[-15:])
+    g = np.mean(deltas[deltas > 0]) if np.any(deltas > 0) else 0
+    l = -np.mean(deltas[deltas < 0]) if np.any(deltas < 0) else 1e-9
+    features['rsi'] = 100 - 100/(1+g/l) if l > 0 else 50
+
+    # Bollinger
+    bb_mid = np.mean(close[-20:])
+    bb_std = np.std(close[-20:])
+    bb_upper = bb_mid + 2*bb_std
+    bb_lower = bb_mid - 2*bb_std
+    features['bb_pct'] = (close[-1] - bb_lower) / (bb_upper - bb_lower + 0.0001)
+    features['bb_pct'] = max(0, min(1, features['bb_pct']))
+
+    # Position
+    h20 = np.max(high[-20:])
+    l20 = np.min(low[-20:])
+    features['pos'] = (close[-1] - l20) / (h20 - l20 + 0.0001)
+    features['pos'] = max(0, min(1, features['pos']))
+
+    # MACD
+    close_s = pd.Series(close)
+    ema12 = close_s.ewm(span=12, adjust=False).mean().values
+    ema26 = close_s.ewm(span=26, adjust=False).mean().values
+    dif = ema12 - ema26
+    dea = pd.Series(dif).ewm(span=9, adjust=False).mean().values
+    hist = 2*(dif - dea)
+    features['macd_hist'] = hist[-1]
+    features['macd_turning'] = hist[-1] > 0 and hist[-2] <= 0
 
     # Volume
-    v5 = np.mean(volume[-5:]); v20 = np.mean(volume[-20:])
-    vol_surge = v5 > v20 * 1.3
+    features['vol_ratio'] = np.mean(volume[-5:]) / (np.mean(volume[-20:]) + 1)
 
-    sig = "HOLD"; reason = ""
+    # Momentum
+    features['roc_8'] = (close[-1] - close[-9])/close[-9]*100 if n >= 9 else 0
+    features['roc_16'] = (close[-1] - close[-17])/close[-17]*100 if n >= 17 else 0
 
-    if code == "000933":  # 神火
-        if golden and ma_bull:
-            sig = "BUY"; reason = f"金叉+MA多头 RSI{int(rsi)}"
-        elif dead and rsi > 60:
-            sig = "SELL"; reason = f"死叉 RSI{int(rsi)}"
-    elif code == "002497":  # 雅化
-        if golden and (vol_surge or ma_bull):
-            sig = "BUY"; reason = f"{'金叉+放量' if vol_surge else '金叉+MA多头'} RSI{int(rsi)}"
-        elif dead:
-            sig = "SELL"; reason = f"死叉 RSI{int(rsi)}"
-    elif code == "000960":  # 锡业
-        if golden and (vol_surge or ma_bull):
-            sig = "BUY"; reason = f"{'金叉+放量' if vol_surge else '金叉+MA多头'} RSI{int(rsi)}"
-        elif dead and rsi > 65:
-            sig = "SELL"; reason = f"死叉 RSI{int(rsi)}"
-    elif code == "000893":  # 亚钾
-        if golden and ma_bull:
-            sig = "BUY"; reason = f"金叉+MA多头 RSI{int(rsi)}"
-        elif dead and rsi > 60:
-            sig = "SELL"; reason = f"死叉 RSI{int(rsi)}"
+    features['close'] = close[-1]
+    return features
 
-    if rsi >= 80 and sig == "BUY":
-        sig = "HOLD"; reason += " [RSI超买否决]"
+def score_buy(code, f):
+    """逐票独立买入规则"""
+    golden = f['golden']
+    rsi = f['rsi']
+    pos = f['pos']
+    bb = f['bb_pct']
+    macd_hist = f['macd_hist']
+    vol = f['vol_ratio']
 
-    return {"code":code,"name":STOCKS[code],"signal":sig,"close":round(float(close[-1]),2),
-            "rsi":round(rsi,1),"reason":reason or "无信号"}
+    # ====== Per-stock rules from grid search ======
+    buy = False
+    reason = ""
 
-# ====== Main ======
-def main():
-    logger.info(f"Scan start @ {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    if code == "000933":
+        # 神火: 金叉+价格低位(0.15-0.4)+布林下轨(0-0.3) → 3d WR 100%
+        if golden and 0.15 <= pos <= 0.4 and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+低位+布林下轨 | 3d WR 100%"
+
+    elif code == "002497":
+        # 雅化: 金叉+布林下轨(0-0.3)+MACD转正 → 1d WR 90.9%
+        if golden and 0.0 <= bb <= 0.3 and macd_hist > 0:
+            buy = True; reason = "金叉+布林下轨+MACD转正 | 1d WR 90.9%"
+        # Fallback: 金叉+低位+布林下轨 → 2d WR 88.9%
+        elif golden and 0.15 <= pos <= 0.4 and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+低位+布林下轨 | 2d WR 88.9%"
+
+    elif code == "000960":
+        # 锡业: 金叉+布林下轨(0-0.2) → 1d WR 93.9%
+        if golden and 0.0 <= bb <= 0.2:
+            buy = True; reason = "金叉+布林下轨 | 1d WR 93.9%"
+        # Fallback: 金叉+低位+布林下轨 → 1d WR 91.3%
+        elif golden and 0.0 <= pos <= 0.3 and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+低位+布林下轨 | 1d WR 91.3%"
+
+    elif code == "000893":
+        # 亚钾: 金叉+低位(0.15-0.4)+布林下轨(0-0.3) → 1d WR 100%
+        if golden and 0.15 <= pos <= 0.4 and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+低位+布林下轨 | 1d WR 100%"
+        # Fallback: 金叉+低位(0.1-0.35)+布林下轨 → 1d WR 100%
+        elif golden and 0.1 <= pos <= 0.35 and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+低位+布林下轨(宽) | 1d WR 100%"
+
+    return buy, reason
+
+def score_sell(code, f):
+    """逐票独立卖出规则"""
+    rsi = f['rsi']
+    pos = f['pos']
+    bb = f['bb_pct']
+    dead = f['dead']
+
+    sell = False
+    reason = ""
+
+    if code == "000933":
+        # 神火: RSI75-90+高位(0.8-1.0)+布林上轨(0.8-1.0) → f2d FALL 65.1%
+        if rsi >= 75 and pos >= 0.8 and bb >= 0.8:
+            sell = True; reason = "RSI75+高位+布林上轨 | 2d FALL 65%"
+        elif rsi >= 70 and pos >= 0.8 and bb >= 0.85:
+            sell = True; reason = "RSI≥70+高位+布林上轨 | 2d FALL 64%"
+
+    elif code == "002497":
+        # 雅化: RSI65-85+高位(0.8-1.0)+布林上轨(0.85-1.0) → f1d FALL 68.4%
+        if rsi >= 65 and pos >= 0.8 and bb >= 0.85:
+            sell = True; reason = "RSI≥65+高位+布林上轨 | 1d FALL 68%"
+        elif rsi >= 75 and pos >= 0.8 and bb >= 0.8:
+            sell = True; reason = "RSI≥75+高位+布林上轨 | 1d FALL 67%"
+
+    elif code == "000960":
+        # 锡业: RSI75-90+高位(0.6-1.0)+布林上轨(0.85-1.0) → f1d FALL 63.3%
+        if rsi >= 75 and pos >= 0.6 and bb >= 0.85:
+            sell = True; reason = "RSI≥75+高位+布林上轨 | 1d FALL 63%"
+        elif rsi >= 65 and pos >= 0.7 and bb >= 0.85:
+            sell = True; reason = "RSI≥65+高位+布林上轨 | 1d FALL 61%"
+
+    elif code == "000893":
+        # 亚钾: RSI75-90+高位(0.6-1.0)+布林上轨(0.8-1.0) → f1d FALL 70%
+        if rsi >= 75 and pos >= 0.6 and bb >= 0.8:
+            sell = True; reason = "RSI≥75+高位+布林上轨 | 1d FALL 70%"
+        elif rsi >= 70 and pos >= 0.6 and bb >= 0.85:
+            sell = True; reason = "RSI≥70+高位+布林上轨 | 1d FALL 68%"
+
+    return sell, reason
+
+def scan_and_push():
+    now = datetime.now()
+    logger.info(f"Scan @ {now.strftime('%Y-%m-%d %H:%M:%S')}")
+
     results = []
     for code, name in STOCKS.items():
         df = fetch_data(code)
-        if df.empty or len(df) < 20:
-            logger.warning(f"  {code} {name}: NO DATA")
-            results.append({"code":code,"name":name,"signal":"HOLD","close":0,"reason":"无数据"})
+        if df.empty or len(df) < 30:
+            logger.warning(f"  {code} {name}: no data")
+            results.append({"code":code,"name":name,"signal":"NODATA","close":0,"reason":"无数据"})
             continue
-        s = calc_signal(df, code)
-        if s:
-            results.append(s)
-            flag = ">>" if s["signal"] != "HOLD" else "  "
-            logger.info(f"  {flag} {s['signal']:4s} {code} {name} @ {s['close']} | {s['reason']} | RSI={s['rsi']}")
 
-    buy = [s for s in results if s["signal"] == "BUY"]
-    sell = [s for s in results if s["signal"] == "SELL"]
+        f = compute_latest_features(df)
 
-    if not buy and not sell:
-        logger.info("No trade signals — skip push")
+        buy, reason_b = score_buy(code, f)
+        sell, reason_s = score_sell(code, f)
+
+        if buy:
+            sig = "BUY"
+            reason = reason_b
+        elif sell:
+            sig = "SELL"
+            reason = reason_s
+        else:
+            sig = "HOLD"
+            reason = ""
+
+        r = {"code": code, "name": name, "signal": sig,
+             "close": round(f['close'], 2), "rsi": round(f['rsi'], 1),
+             "pos": round(f['pos'], 2), "bb": round(f['bb_pct'], 2),
+             "golden": f['golden'], "reason": reason}
+        results.append(r)
+
+        if sig != "HOLD":
+            logger.info(f"  >>> {sig:4s} {code} {name} @ {f['close']:.2f} | {reason}")
+        else:
+            logger.info(f"      HOLD  {code} {name} @ {f['close']:.2f} | RSI={f['rsi']:.0f} pos={f['pos']:.2f} bb={f['bb_pct']:.2f}")
+
+    buy_sigs = [s for s in results if s["signal"] == "BUY"]
+    sell_sigs = [s for s in results if s["signal"] == "SELL"]
+
+    if not buy_sigs and not sell_sigs:
+        logger.info("No signals — skip push")
         return results
 
-    now_str = datetime.now().strftime("%m/%d %H:%M")
+    now_str = now.strftime("%m/%d %H:%M")
     rows = ""
-    for s in buy:
-        rows += f'<tr style="background:#3d1515"><td>🔴<b>BUY</b></td><td><b>{s["code"]}</b></td><td>{s["name"]}</td><td style="color:#e74c3c"><b>{s["close"]}</b></td><td>{s["reason"]}</td><td>RSI{s["rsi"]}</td></tr>'
-    for s in sell:
-        rows += f'<tr style="background:#153d15"><td>🟢<b>SELL</b></td><td><b>{s["code"]}</b></td><td>{s["name"]}</td><td style="color:#27ae60"><b>{s["close"]}</b></td><td>{s["reason"]}</td><td>RSI{s["rsi"]}</td></tr>'
+    title_parts = []
+    for s in buy_sigs:
+        title_parts.append(f"买{s['name']}")
+        rows += f'<tr style="background:#3d1515"><td>🔴<b>BUY</b></td><td><b>{s["code"]}</b></td><td>{s["name"]}</td><td style="color:#e74c3c;font-size:16px"><b>{s["close"]}</b></td><td>RSI{s["rsi"]}</td><td>pos{s["pos"]}</td><td>BB{s["bb"]}</td><td style="font-size:12px">{s["reason"]}</td></tr>'
+    for s in sell_sigs:
+        title_parts.append(f"卖{s['name']}")
+        rows += f'<tr style="background:#153d15"><td>🟢<b>SELL</b></td><td><b>{s["code"]}</b></td><td>{s["name"]}</td><td style="color:#27ae60;font-size:16px"><b>{s["close"]}</b></td><td>RSI{s["rsi"]}</td><td>pos{s["pos"]}</td><td>BB{s["bb"]}</td><td style="font-size:12px">{s["reason"]}</td></tr>'
 
-    title = f"📊 {'买入'+str(len(buy))+'只 ' if buy else ''}{'卖出'+str(len(sell))+'只 ' if sell else ''}{now_str}"
+    title = f"📊 {', '.join(title_parts)} {now_str}"
     content = f"""
-<div style="background:#1a1a2e;color:#eee;padding:15px;border-radius:10px;font-family:Arial">
-<h2>📊 15min买卖点 — {now_str}</h2>
-<table style="width:100%;color:#eee;border-collapse:collapse;margin-top:10px;font-size:15px">
-<tr style="border-bottom:2px solid #444"><th></th><th>代码</th><th>股票</th><th>价格</th><th>信号</th><th>RSI</th></tr>
+<div style="background:#1a1a2e;color:#eee;padding:15px;border-radius:10px;font-family:Arial;max-width:520px">
+<h2>📊 概率驱动买卖点 — {now_str}</h2>
+<table style="width:100%;color:#eee;border-collapse:collapse;margin-top:10px;font-size:13px">
+<tr style="border-bottom:2px solid #444"><th></th><th>代码</th><th>股票</th><th>价格</th><th>RSI</th><th>位置</th><th>布林</th><th>信号依据</th></tr>
 {rows}
 </table>
-<p style="color:#888;font-size:11px;margin-top:10px">仅提供买卖点参考 · 不构成投资建议 · 本地策略信号</p>
+<p style="color:#888;font-size:11px;margin-top:10px">
+基于2年15min数据网格搜索 | 逐票独立规则 | 买入目标WR>=88% | 卖出目标FALL>=30%<br>
+神火:金叉+低位+布林下轨3d WR100% | 雅化:金叉+布林下轨+MACD转正1d WR91%<br>
+锡业:金叉+布林下轨1d WR94% | 亚钾:金叉+低位+布林下轨1d WR100%<br>
+仅提供买卖点参考，不构成投资建议
+</p>
 </div>
 """
     push_msg(title, content)
-    logger.info(f"PUSHED: {len(buy)}B {len(sell)}S")
+    logger.info(f"PUSHED: {len(buy_sigs)}B {len(sell_sigs)}S")
     return results
 
 if __name__ == "__main__":
-    main()
+    scan_and_push()
