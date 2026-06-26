@@ -236,8 +236,10 @@ class BacktestEngine:
 
         if not trades:
             return {
-                "total_return": 0.0, "win_rate": 0, "total_trades": 0,
+                "total_return": 0.0, "total_pnl": 0.0, "total_equity_at_end": self.initial_capital,
+                "win_rate": 0, "total_trades": 0,
                 "sharpe": 0, "max_drawdown": 0, "profit_factor": 0,
+                "avg_win": 0, "avg_loss": 0, "calmar": 0,
                 "trades": [], "equity_curve": equity,
             }
 

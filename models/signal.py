@@ -52,7 +52,7 @@ class SignalGenerator:
         scores = pd.DataFrame(index=df.index)
 
         # === 1. 技术维度 (权重 0.35) — 增强版：MA双周期共振为核心 ===
-        tech_score = 0.5  # 基础分
+        tech_score = pd.Series(0.5, index=df.index)  # 基础分（Series确保后续.clip可用）
 
         # --- A. MA双周期共振特征 (权重最大的技术子项) ---
         # ma_entry_score: 由 features/ma_resonance.py 计算，融合5min入场+15min方向
@@ -112,8 +112,8 @@ class SignalGenerator:
 
         scores["technical"] = tech_score.clip(0, 1)
 
-        # === 2. 大盘环境维度 (权重 0.20) ===
-        market_score = 0.5
+        # === 2. 大盘环境维度 (权重 0.15) ===
+        market_score = pd.Series(0.5, index=df.index)
         if "sh_pct_change" in df.columns:
             market_score += ((df["sh_pct_change"] > 0).astype(float) - 0.5) * 0.3
             # 大盘涨且个股强于大盘
@@ -121,7 +121,7 @@ class SignalGenerator:
         scores["market"] = market_score.clip(0, 1)
 
         # === 3. 美股映射维度 (权重 0.10) ===
-        us_score = 0.5
+        us_score = pd.Series(0.5, index=df.index)
         if "us_weighted_return" in df.columns:
             us_score += (df["us_weighted_return"] * 10).clip(-0.4, 0.4)
         if "us_overnight_signal" in df.columns:
@@ -130,7 +130,7 @@ class SignalGenerator:
         scores["us_mapping"] = us_score.clip(0, 1)
 
         # === 4. 板块维度 (权重 0.15) ===
-        sector_score = 0.5
+        sector_score = pd.Series(0.5, index=df.index)
         if "sector_strength_score" in df.columns:
             sector_score = df["sector_strength_score"]
         if "sector_is_leading" in df.columns:
@@ -138,7 +138,7 @@ class SignalGenerator:
         scores["sector"] = sector_score.clip(0, 1)
 
         # === 5. 资金流向维度 (权重 0.15) ===
-        flow_score = 0.5
+        flow_score = pd.Series(0.5, index=df.index)
         if "flow_capital_score" in df.columns:
             flow_score += df["flow_capital_score"] * 0.5
         if "flow_stock_flow_trend" in df.columns:
@@ -146,7 +146,7 @@ class SignalGenerator:
         scores["money_flow"] = flow_score.clip(0, 1)
 
         # === 6. 新闻情绪维度 (权重 0.10) ===
-        news_score = 0.5
+        news_score = pd.Series(0.5, index=df.index)
         if "news_sentiment_score" in df.columns:
             news_score += df["news_sentiment_score"] * 0.5
         if "news_sentiment_signal" in df.columns:
@@ -202,6 +202,7 @@ class SignalGenerator:
         except Exception:
             ml_buy_prob = np.zeros(len(result))
             ml_sell_prob = np.zeros(len(result))
+            ml_proba = None
 
         # === 综合评分 ===
         composite = (

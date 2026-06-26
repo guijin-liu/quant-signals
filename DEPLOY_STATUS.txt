@@ -1,1 +1,1 @@
-DEPLOY OK v7: Gitee quant-signals repo active. v7 per-stock strategy deployed 2026-06-22. CI weekdays 9:00-15:30 every 30min. PushPlus to WeChat.
+DEPLOY OK v8: 15分钟纯MA策略已上线。工作日9:00-15:30每30分钟推微信。规则: 神火=金叉+MA多, 雅化=金叉+放量, 锡业=金叉+放量, 亚钾=金叉+MA多。2026-06-22 test passed.
