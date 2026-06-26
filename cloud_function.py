@@ -85,9 +85,20 @@ def compute_features(df):
     return f
 
 def score_buy(code, f):
-    """买入: 4只有历史回测的逐票独立 + 其余通用规则"""
+    """买入: 逐票独立 + ETF通用 + 纳指ETF关联"""
     golden = f['golden']; rsi = f['rsi']; pos = f['pos']; bb = f['bb_pct']
     close = f['close']; B, R, T, P = False, "", 0.0, 0.0
+
+    # === 纳指ETF (159941/513100) — 关联纳斯达克指数 ===
+    if code in ("159941", "513100"):
+        # 布林下轨 + MACD转正 (最强的纳指ETF买点)
+        if golden and bb <= 0.25 and pos <= 0.3:
+            B,R,T,P = True,"金叉+低位+布林下轨(纳指关联)",round(close*1.022,2),2.20
+        elif golden and bb <= 0.3:
+            B,R,T,P = True,"金叉+布林下轨(纳指)",round(close*1.018,2),1.80
+        elif pos <= 0.2 and bb <= 0.2:
+            B,R,T,P = True,"超卖+布林下轨(纳指)",round(close*1.015,2),1.50
+        return B, R, T, P
 
     if code == "000933":
         if golden and bb <= 0.3: B,R,T,P = True,"金叉+布林下轨",round(close*1.016,2),1.60
@@ -111,8 +122,13 @@ def score_buy(code, f):
     return B, R, T, P
 
 def score_sell(code, f):
-    """卖出: 逐票独立 + 通用"""
+    """卖出: 逐票独立 + ETF + 通用"""
     rsi = f['rsi']; pos = f['pos']; bb = f['bb_pct']
+
+    # === 纳指ETF 卖出 ===
+    if code in ("159941", "513100"):
+        if rsi >= 70 and bb >= 0.85: return True, "RSI70+布林上轨(纳指)"
+        if rsi >= 75 and pos >= 0.7: return True, "RSI75+高位(纳指)"
 
     if code == "000933":
         if rsi >= 75 and pos >= 0.8 and bb >= 0.8: return True, "RSI75+高位+布林上轨"
