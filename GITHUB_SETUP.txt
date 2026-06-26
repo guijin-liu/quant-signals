@@ -1,0 +1,16 @@
+Copy this SSH key to GitHub:
+================================================================
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHbAHne0JddupFJddOo+EgLCtWjMXkG3f2B4GeaOic/d 182521582@qq.com
+================================================================
+
+Step 1: Open https://github.com/settings/keys
+Step 2: Click "New SSH Key"
+Step 3: Title = "Windows-PC", Key = paste above line
+Step 4: Click "Add SSH Key"
+
+Step 5: Create repo at https://github.com/new
+        Name: quant-signals
+        Type: Public
+        Do NOT initialize with README
+
+After these 2 steps, I'll push the code and GitHub Actions will start running.
