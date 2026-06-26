@@ -117,10 +117,15 @@ def score_buy(code, f):
         elif golden and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+低位+布林下轨",round(close*1.022,2),2.20
         elif golden and 30 <= rsi <= 50 and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+RSI30-50+低位+BB",round(close*1.0176,2),1.76
     elif code == "000893":
-        if golden and 40 <= rsi <= 55 and pos <= 0.4 and bb <= 0.3 and vol_ok:
-            B,R,T,P = True,"金叉+RSI40-55+低位+BB+量价共振",round(close*1.020,2),2.00
-        elif golden and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+低位+布林下轨",round(close*1.0207,2),2.07
-        elif golden and bb <= 0.3: B,R,T,P = True,"金叉+布林下轨",round(close*1.0211,2),2.11
+        # v15新发现: 金叉+RSI40-55+pos<0.3+BB<0.15+量增 WR=93.8%!
+        if golden and 40 <= rsi <= 55 and pos <= 0.3 and bb <= 0.15 and vol_ok:
+            B,R,T,P = True,"金叉+RSI40-55+超低位+BB极窄+量价",round(close*1.020,2),2.00
+        elif golden and 35 <= rsi <= 55 and pos <= 0.4 and bb <= 0.15 and vol > 1.3:
+            B,R,T,P = True,"金叉+RSI35-55+低位+BB窄+放量 WR91.7%",round(close*1.022,2),2.20
+        elif golden and 40 <= rsi <= 55 and pos <= 0.4 and bb <= 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+RSI40-55+低位+BB+量价",round(close*1.020,2),2.00
+        elif golden and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+低位+BB",round(close*1.0207,2),2.07
+        elif golden and bb <= 0.3: B,R,T,P = True,"金叉+BB",round(close*1.0211,2),2.11
     else:
         if golden and pos < 0.4 and bb < 0.3 and vol_ok: B,R,T,P = True,"金叉+低位+BB+量价共振",round(close*1.022,2),2.20
         elif golden and bb < 0.3 and vol_ok: B,R,T,P = True,"金叉+布林下轨+量价配合",round(close*1.017,2),1.70
