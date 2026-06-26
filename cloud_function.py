@@ -155,37 +155,28 @@ def scan_and_push():
              "target":target if target>0 else 0,"target_pct":tp if tp>0 else 0}
         results.append(r)
 
-        if sig == "BUY": logger.info(f"  >>> BUY  {code} {name} @ {f['close']:.2f} +{tp}% | {reason}")
-        elif sig == "SELL": logger.info(f"  >>> SELL {code} {name} @ {f['close']:.2f} | {reason}")
-        else: logger.info(f"      HOLD  {code} {name} @ {f['close']:.2f} RSI={f['rsi']:.0f} pos={f['pos']:.2f} bb={f['bb_pct']:.2f}")
+        # === 有信号立即单独推送 ===
+        if sig == "BUY":
+            logger.info(f"  >>> BUY  {code} {name} @ {f['close']:.2f} +{tp}% | {reason}")
+            t = r['target']; tp_val = r['target_pct']
+            push_msg(f"{name} 现价{r['close']} 建议买入 目标{t}(+{tp_val}%) T+1可卖",
+                     f'<div style="font-size:16px;padding:12px;line-height:2.2"><b>{name}</b> {code}<br>'
+                     f'现价 <b style="color:#e74c3c;font-size:22px">{r["close"]}</b><br>'
+                     f'<span style="color:#e74c3c;font-size:16px">建议买入</span><br>'
+                     f'目标 <b>{t}</b> (+{tp_val}%)<br>'
+                     f'T+1可卖 | {reason}<br>'
+                     f'<span style="color:#888;font-size:11px">{now.strftime("%m/%d %H:%M")} | 逐票概率</span></div>')
+        elif sig == "SELL":
+            logger.info(f"  >>> SELL {code} {name} @ {f['close']:.2f} | {reason}")
+            push_msg(f"{name} 现价{r['close']} 建议卖出",
+                     f'<div style="font-size:16px;padding:12px;line-height:2.2"><b>{name}</b> {code}<br>'
+                     f'现价 <b style="color:#27ae60;font-size:22px">{r["close"]}</b><br>'
+                     f'<span style="color:#27ae60;font-size:16px">建议卖出</span><br>'
+                     f'{reason}<br>'
+                     f'<span style="color:#888;font-size:11px">{now.strftime("%m/%d %H:%M")} | 逐票概率</span></div>')
+        else:
+            logger.info(f"      HOLD  {code} {name} @ {f['close']:.2f} RSI={f['rsi']:.0f} pos={f['pos']:.2f} bb={f['bb_pct']:.2f}")
 
-    buy_sigs = [s for s in results if s["signal"]=="BUY"]
-    sell_sigs = [s for s in results if s["signal"]=="SELL"]
-
-    if not buy_sigs and not sell_sigs:
-        logger.info("No signals — skip push")
-        return results
-
-    now_str = now.strftime("%m/%d %H:%M")
-    lines, title_parts = [], []
-
-    for s in buy_sigs:
-        t = s.get('target',0); tp = s.get('target_pct',0)
-        if t > 0: lines.append(f"{s['name']} 现价{s['close']} 建议买入 目标{t}(+{tp}%) T+1可卖")
-        else: lines.append(f"{s['name']} 现价{s['close']} 建议买入")
-        title_parts.append(f"买{s['name']}")
-
-    for s in sell_sigs:
-        lines.append(f"{s['name']} 现价{s['close']} 建议卖出")
-        title_parts.append(f"卖{s['name']}")
-
-    title = " ".join(lines[:2])
-    if len(title) > 80: title = " ".join(lines[:1])
-    if len(title) > 80: title = f"{len(buy_sigs)}买{len(sell_sigs)}卖 {now_str}"
-
-    content = f'<div style="font-size:16px;padding:12px;line-height:2.2">{"<br>".join(lines)}<br><span style="color:#999;font-size:11px">{now_str} | 逐票概率 | 仅供参考</span></div>'
-    push_msg(title, content)
-    logger.info(f"PUSHED: {len(buy_sigs)}B {len(sell_sigs)}S")
     return results
 
 if __name__ == "__main__":
