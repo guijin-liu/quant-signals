@@ -171,25 +171,6 @@ def run_daily_backtest(data: dict = None, years: int = 5):
         logger.error("无日线数据，无法回测")
         return
 
-    # 获取其他数据源
-    if data is None:
-        logger.info("获取辅助数据...")
-        data = {}
-        try:
-            from data.sector import get_relevant_sectors
-            from data.capital_flow import get_all_capital_flow
-            from data.news import get_all_news
-            from data.us_market import get_us_mapping_data
-
-            sector_result = get_relevant_sectors()
-            data["sector_data"] = sector_result
-            data["capital_flow"] = get_all_capital_flow()
-            data["news_data"] = get_all_news()
-            data["us_map"] = get_us_mapping_data()
-            data["market_indices"] = {}
-        except Exception as e:
-            logger.warning(f"获取辅助数据失败: {e}，将使用简化回测")
-
     # 对日线数据计算技术指标
     from features.technical import compute_all_technical_features
 
@@ -197,33 +178,21 @@ def run_daily_backtest(data: dict = None, years: int = 5):
     for code, df in daily_data.items():
         logger.info(f"处理 {code} {STOCK_POOL[code]['name']}...")
         df = compute_all_technical_features(df, "daily")
-        if df.empty:
-            continue
-
-        # 简化信号生成（日线级别）
+        if df.empty: continue
         df = _generate_daily_signals(df)
         all_signals.append(df)
 
     if not all_signals:
-        logger.error("无有效信号数据")
-        return
+        logger.error("无有效信号数据"); return
 
-    # 合并，运行回测
     import pandas as pd
     signal_df = pd.concat(all_signals, ignore_index=True)
     signal_df.sort_values(["datetime", "symbol"], inplace=True)
 
     from backtest.engine import BacktestEngine
-    from backtest.report import save_report
-
     engine = BacktestEngine()
     results = engine.run(signal_df)
     engine.print_summary()
-
-    # 保存报告
-    report_dir = save_report(results, str(Path(__file__).parent / "reports"))
-    logger.info(f"报告已保存到: {report_dir}")
-
     return results
 
 
