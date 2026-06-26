@@ -85,9 +85,11 @@ def compute_features(df):
     return f
 
 def score_buy(code, f):
-    """买入: 逐票独立 + ETF通用 + 纳指ETF关联"""
+    """买入: 逐票独立 + ETF + 量价共振 + 通用"""
     golden = f['golden']; rsi = f['rsi']; pos = f['pos']; bb = f['bb_pct']
-    close = f['close']; B, R, T, P = False, "", 0.0, 0.0
+    close = f['close']; vol = f.get('vol_ratio', 1.0)
+    B, R, T, P = False, "", 0.0, 0.0
+    vol_ok = vol > 1.0  # 量价配合：成交量不萎缩
 
     # === 纳指ETF (159941/513100) — 关联纳斯达克指数 ===
     if code in ("159941", "513100"):
@@ -101,24 +103,28 @@ def score_buy(code, f):
         return B, R, T, P
 
     if code == "000933":
-        if golden and bb <= 0.3: B,R,T,P = True,"金叉+布林下轨",round(close*1.016,2),1.60
+        if golden and bb <= 0.3 and vol_ok: B,R,T,P = True,"金叉+布林下轨+量价共振",round(close*1.018,2),1.80
         elif golden and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+低位+布林下轨",round(close*1.0135,2),1.35
     elif code == "002497":
-        if golden and 40 <= rsi <= 55 and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+RSI40-55+低位+布林下轨",round(close*1.0252,2),2.52
-        elif golden and bb <= 0.3: B,R,T,P = True,"金叉+布林下轨",round(close*1.0224,2),2.24
+        if golden and 40 <= rsi <= 55 and pos <= 0.4 and bb <= 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+RSI40-55+低位+BB+量价共振",round(close*1.028,2),2.80
+        elif golden and bb <= 0.3 and vol > 1.3: B,R,T,P = True,"金叉+布林下轨+放量",round(close*1.025,2),2.50
+        elif golden and bb <= 0.3 and vol_ok: B,R,T,P = True,"金叉+布林下轨+量价配合",round(close*1.0224,2),2.24
         elif golden and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+低位+布林下轨",round(close*1.0176,2),1.76
     elif code == "000960":
-        if golden and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+低位+布林下轨",round(close*1.022,2),2.20
-        elif golden and bb <= 0.2: B,R,T,P = True,"金叉+布林下轨",round(close*1.0259,2),2.59
-        elif golden and 30 <= rsi <= 50 and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+RSI30-50+低位+布林下轨",round(close*1.0176,2),1.76
+        if golden and pos <= 0.4 and bb <= 0.3 and vol_ok: B,R,T,P = True,"金叉+低位+BB+量价共振",round(close*1.024,2),2.40
+        elif golden and bb <= 0.2 and vol_ok: B,R,T,P = True,"金叉+布林下轨+量价配合",round(close*1.027,2),2.70
+        elif golden and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+低位+布林下轨",round(close*1.022,2),2.20
+        elif golden and 30 <= rsi <= 50 and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+RSI30-50+低位+BB",round(close*1.0176,2),1.76
     elif code == "000893":
-        if golden and 40 <= rsi <= 55 and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+RSI40-55+低位+布林下轨",round(close*1.0185,2),1.85
+        if golden and 40 <= rsi <= 55 and pos <= 0.4 and bb <= 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+RSI40-55+低位+BB+量价共振",round(close*1.020,2),2.00
         elif golden and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+低位+布林下轨",round(close*1.0207,2),2.07
         elif golden and bb <= 0.3: B,R,T,P = True,"金叉+布林下轨",round(close*1.0211,2),2.11
     else:
-        # 通用规则
-        if golden and pos < 0.4 and bb < 0.3: B,R,T,P = True,"金叉+低位+布林下轨",round(close*1.02,2),2.0
-        elif golden and bb < 0.3: B,R,T,P = True,"金叉+布林下轨",round(close*1.015,2),1.5
+        if golden and pos < 0.4 and bb < 0.3 and vol_ok: B,R,T,P = True,"金叉+低位+BB+量价共振",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok: B,R,T,P = True,"金叉+布林下轨+量价配合",round(close*1.017,2),1.70
+        elif golden and bb < 0.3: B,R,T,P = True,"金叉+布林下轨",round(close*1.015,2),1.50
     return B, R, T, P
 
 def score_sell(code, f):
