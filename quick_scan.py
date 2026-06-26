@@ -11,7 +11,12 @@ logger = logging.getLogger()
 
 PUSHPLUS_TOKEN = "f3fb5c092ba34785b6857bb45d23d4fa"
 PUSHPLUS_URL = "http://www.pushplus.plus/send"
-STOCKS = {"000933": "神火", "002497": "雅化", "000960": "锡业", "000893": "亚钾"}
+# 从stock_pool导入，保持同步
+try:
+    from stock_pool import STOCK_POOL
+    STOCKS = {code: STOCK_POOL[code]["name"] for code in STOCK_POOL}
+except:
+    STOCKS = {"000933": "神火", "002497": "雅化", "000960": "锡业", "000893": "亚钾"}
 
 def push_msg(title, content):
     try:
