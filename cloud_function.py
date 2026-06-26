@@ -58,6 +58,7 @@ def fetch_data(code):
         return pd.DataFrame()
 
 def compute_features(df):
+    """特征计算 — BB%修正: 0=下轨, 1=上轨"""
     close = df['close'].values; high = df['high'].values
     low = df['low'].values; volume = df['volume'].values; n = len(close)
     f = {}
@@ -71,11 +72,17 @@ def compute_features(df):
     g = np.mean(deltas[deltas > 0]) if np.any(deltas > 0) else 0
     l = -np.mean(deltas[deltas < 0]) if np.any(deltas < 0) else 1e-9
     f['rsi'] = 100 - 100/(1+g/l) if l > 0 else 50
-    bb_mid = np.mean(close[-20:]); bb_std = np.std(close[-20:])
-    f['bb_pct'] = max(0, min(1, (close[-1] - bb_mid + 2*bb_std) / (4*bb_std + 0.0001) + 0.5))
+    # BB% = (close - lower) / (upper - lower), clipped to 0-1
+    bb_s = np.std(close[-20:]); bb_m = np.mean(close[-20:])
+    f['bb_pct'] = max(0.0, min(1.0, (close[-1] - (bb_m - 2*bb_s)) / (4*bb_s + 0.0001)))
     h20 = np.max(high[-20:]); l20 = np.min(low[-20:])
-    f['pos'] = max(0, min(1, (close[-1] - l20) / (h20 - l20 + 0.0001)))
+    f['pos'] = max(0.0, min(1.0, (close[-1] - l20) / (h20 - l20 + 0.0001)))
     f['vol_ratio'] = np.mean(volume[-5:]) / (np.mean(volume[-20:]) + 1)
+    # MACD快速判断
+    ema12 = pd.Series(close).ewm(span=12, adjust=False).mean().values
+    ema26 = pd.Series(close).ewm(span=26, adjust=False).mean().values
+    macd_h = 2 * ((ema12[-1] - ema26[-1]) - pd.Series(ema12-ema26).ewm(span=9, adjust=False).mean().values[-1])
+    f['macd_turning'] = macd_h > 0 and (2 * ((ema12[-2] - ema26[-2]) - pd.Series(ema12-ema26).ewm(span=9, adjust=False).mean().values[-2])) <= 0
     return f
 
 def score_buy(code, f):
