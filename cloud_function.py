@@ -1,4 +1,4 @@
-"""v12 量化买卖点 — 40只股票 逐票独立+通用规则 (Gitee同步)"""
+"""v13 量化买卖点 — 41只股票 逐票独立+ETF+通用 (Gitee同步)"""
 import os, sys, json, logging, requests
 import numpy as np, pandas as pd
 from datetime import datetime, timedelta
