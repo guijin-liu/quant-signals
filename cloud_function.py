@@ -22,7 +22,11 @@ logger = logging.getLogger()
 PUSHPLUS_TOKEN = "f3fb5c092ba34785b6857bb45d23d4fa"
 PUSHPLUS_URL = "http://www.pushplus.plus/send"
 
-STOCKS = {"000933": "神火", "002497": "雅化", "000960": "锡业", "000893": "亚钾"}
+STOCKS = {
+    "000933": "神火", "002497": "雅化", "000960": "锡业", "000893": "亚钾",
+    "000807": "云铝", "000630": "铜陵", "601899": "紫金", "600362": "江铜",
+    "002460": "赣锋", "002466": "天齐",
+}
 
 def push_msg(title, content):
     try:
@@ -207,43 +211,100 @@ def score_buy(code, f):
 
     return buy, reason, target_price, target_pct
 
-def score_sell(code, f):
-    """逐票独立卖出规则"""
-    rsi = f['rsi']
-    pos = f['pos']
-    bb = f['bb_pct']
-    dead = f['dead']
+# ====== 通用买入规则 (新股票无历史数据时使用) ======
+def score_buy_generic(f):
+    """通用买入：金叉+低位+布林下轨，默认参数"""
+    golden = f['golden']; rsi = f['rsi']; pos = f['pos']; bb = f['bb_pct']
+    if golden and pos < 0.4 and bb < 0.3:
+        return True, "金叉+低位+布林下轨", round(f['close'] * 1.02, 2), 2.0
+    if golden and bb < 0.3:
+        return True, "金叉+布林下轨", round(f['close'] * 1.015, 2), 1.5
+    return False, "", 0, 0
 
-    sell = False
-    reason = ""
+def score_sell_generic(f):
+    """通用卖出：RSI高位+价格高位+布林上轨"""
+    rsi = f['rsi']; pos = f['pos']; bb = f['bb_pct']
+    if rsi >= 70 and pos >= 0.7 and bb >= 0.8:
+        return True, "RSI高位+布林上轨"
+    if rsi >= 75 and pos >= 0.6:
+        return True, "RSI超买+高位"
+    return False, ""
+
+def score_buy(code, f):
+    """逐票独立买入规则 + 通用回退"""
+    golden = f['golden']; rsi = f['rsi']; pos = f['pos']; bb = f['bb_pct']
+    close = f['close']
+
+    buy = False; reason = ""; target_price = 0; target_pct = 0
 
     if code == "000933":
-        # 神火: RSI75-90+高位(0.8-1.0)+布林上轨(0.8-1.0) → f2d FALL 65.1%
-        if rsi >= 75 and pos >= 0.8 and bb >= 0.8:
-            sell = True; reason = "RSI75+高位+布林上轨 | 2d FALL 65%"
-        elif rsi >= 70 and pos >= 0.8 and bb >= 0.85:
-            sell = True; reason = "RSI≥70+高位+布林上轨 | 2d FALL 64%"
+        if golden and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+布林下轨"; target_pct = 1.60; target_price = round(close * 1.016, 2)
+        elif golden and 0.0 <= pos <= 0.4 and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+低位+布林下轨"; target_pct = 1.35; target_price = round(close * 1.0135, 2)
 
     elif code == "002497":
-        # 雅化: RSI65-85+高位(0.8-1.0)+布林上轨(0.85-1.0) → f1d FALL 68.4%
-        if rsi >= 65 and pos >= 0.8 and bb >= 0.85:
-            sell = True; reason = "RSI≥65+高位+布林上轨 | 1d FALL 68%"
-        elif rsi >= 75 and pos >= 0.8 and bb >= 0.8:
-            sell = True; reason = "RSI≥75+高位+布林上轨 | 1d FALL 67%"
+        if golden and 40 <= rsi <= 55 and 0.0 <= pos <= 0.4 and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+RSI40-55+低位+布林下轨"; target_pct = 2.52; target_price = round(close * 1.0252, 2)
+        elif golden and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+布林下轨"; target_pct = 2.24; target_price = round(close * 1.0224, 2)
+        elif golden and 0.0 <= pos <= 0.4 and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+低位+布林下轨"; target_pct = 1.76; target_price = round(close * 1.0176, 2)
 
     elif code == "000960":
-        # 锡业: RSI75-90+高位(0.6-1.0)+布林上轨(0.85-1.0) → f1d FALL 63.3%
-        if rsi >= 75 and pos >= 0.6 and bb >= 0.85:
-            sell = True; reason = "RSI≥75+高位+布林上轨 | 1d FALL 63%"
-        elif rsi >= 65 and pos >= 0.7 and bb >= 0.85:
-            sell = True; reason = "RSI≥65+高位+布林上轨 | 1d FALL 61%"
+        if golden and 0.0 <= pos <= 0.4 and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+低位+布林下轨"; target_pct = 2.20; target_price = round(close * 1.022, 2)
+        elif golden and 0.0 <= bb <= 0.2:
+            buy = True; reason = "金叉+布林下轨(窄)"; target_pct = 2.59; target_price = round(close * 1.0259, 2)
+        elif golden and 30 <= rsi <= 50 and 0.0 <= pos <= 0.4 and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+RSI30-50+低位+布林下轨"; target_pct = 1.76; target_price = round(close * 1.0176, 2)
 
     elif code == "000893":
-        # 亚钾: RSI75-90+高位(0.6-1.0)+布林上轨(0.8-1.0) → f1d FALL 70%
+        if golden and 40 <= rsi <= 55 and 0.0 <= pos <= 0.4 and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+RSI40-55+低位+布林下轨"; target_pct = 1.85; target_price = round(close * 1.0185, 2)
+        elif golden and 0.0 <= pos <= 0.4 and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+低位+布林下轨"; target_pct = 2.07; target_price = round(close * 1.0207, 2)
+        elif golden and 0.0 <= bb <= 0.3:
+            buy = True; reason = "金叉+布林下轨"; target_pct = 2.11; target_price = round(close * 1.0211, 2)
+
+    else:
+        # 新股票用通用规则
+        return score_buy_generic(f)
+
+    return buy, reason, target_price, target_pct
+
+def score_sell(code, f):
+    """逐票独立卖出规则 + 通用回退"""
+    rsi = f['rsi']; pos = f['pos']; bb = f['bb_pct']
+
+    sell = False; reason = ""
+
+    if code == "000933":
+        if rsi >= 75 and pos >= 0.8 and bb >= 0.8:
+            sell = True; reason = "RSI75+高位+布林上轨"
+        elif rsi >= 70 and pos >= 0.8 and bb >= 0.85:
+            sell = True; reason = "RSI70+高位+布林上轨"
+
+    elif code == "002497":
+        if rsi >= 65 and pos >= 0.8 and bb >= 0.85:
+            sell = True; reason = "RSI65+高位+布林上轨"
+        elif rsi >= 75 and pos >= 0.8 and bb >= 0.8:
+            sell = True; reason = "RSI75+高位+布林上轨"
+
+    elif code == "000960":
+        if rsi >= 75 and pos >= 0.6 and bb >= 0.85:
+            sell = True; reason = "RSI75+高位+布林上轨"
+        elif rsi >= 65 and pos >= 0.7 and bb >= 0.85:
+            sell = True; reason = "RSI65+高位+布林上轨"
+
+    elif code == "000893":
         if rsi >= 75 and pos >= 0.6 and bb >= 0.8:
-            sell = True; reason = "RSI≥75+高位+布林上轨 | 1d FALL 70%"
+            sell = True; reason = "RSI75+高位+布林上轨"
         elif rsi >= 70 and pos >= 0.6 and bb >= 0.85:
-            sell = True; reason = "RSI≥70+高位+布林上轨 | 1d FALL 68%"
+            sell = True; reason = "RSI70+高位+布林上轨"
+
+    else:
+        return score_sell_generic(f)
 
     return sell, reason
 
