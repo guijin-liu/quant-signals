@@ -85,51 +85,373 @@ def compute_features(df):
     return f
 
 def score_buy(code, f):
-    """买入: 逐票独立 + ETF + 量价共振 + 通用"""
-    golden = f['golden']; rsi = f['rsi']; pos = f['pos']; bb = f['bb_pct']
-    close = f['close']; vol = f.get('vol_ratio', 1.0)
+    """买入: v17逐票独立最优规则 (41只全量回测)"""
+    golden = f["golden"]; rsi = f["rsi"]; pos = f["pos"]; bb = f["bb_pct"]
+    close = f["close"]; vol = f.get("vol_ratio", 1.0)
+    macd_t = f.get("macd_turning", False); macd_b = f.get("macd_bull", False)
     B, R, T, P = False, "", 0.0, 0.0
-    vol_ok = vol > 1.0  # 量价配合：成交量不萎缩
+    vol_ok = vol > 1.0; vol_surge = vol > 1.3
 
-    # === 纳指ETF (159941/513100) — 关联纳斯达克指数 ===
-    if code in ("159941", "513100"):
-        # 布林下轨 + MACD转正 (最强的纳指ETF买点)
-        if golden and bb <= 0.25 and pos <= 0.3:
-            B,R,T,P = True,"金叉+低位+布林下轨(纳指关联)",round(close*1.022,2),2.20
-        elif golden and bb <= 0.3:
-            B,R,T,P = True,"金叉+布林下轨(纳指)",round(close*1.018,2),1.80
-        elif pos <= 0.2 and bb <= 0.2:
-            B,R,T,P = True,"超卖+布林下轨(纳指)",round(close*1.015,2),1.50
-        return B, R, T, P
-
-    if code == "000933":
-        if golden and bb <= 0.3 and vol_ok: B,R,T,P = True,"金叉+布林下轨+量价共振",round(close*1.018,2),1.80
-        elif golden and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+低位+布林下轨",round(close*1.0135,2),1.35
-    elif code == "002497":
-        if golden and 40 <= rsi <= 55 and pos <= 0.4 and bb <= 0.3 and vol_ok:
-            B,R,T,P = True,"金叉+RSI40-55+低位+BB+量价共振",round(close*1.028,2),2.80
-        elif golden and bb <= 0.3 and vol > 1.3: B,R,T,P = True,"金叉+布林下轨+放量",round(close*1.025,2),2.50
-        elif golden and bb <= 0.3 and vol_ok: B,R,T,P = True,"金叉+布林下轨+量价配合",round(close*1.0224,2),2.24
-        elif golden and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+低位+布林下轨",round(close*1.0176,2),1.76
-    elif code == "000960":
-        if golden and pos <= 0.4 and bb <= 0.3 and vol_ok: B,R,T,P = True,"金叉+低位+BB+量价共振",round(close*1.024,2),2.40
-        elif golden and bb <= 0.2 and vol_ok: B,R,T,P = True,"金叉+布林下轨+量价配合",round(close*1.027,2),2.70
-        elif golden and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+低位+布林下轨",round(close*1.022,2),2.20
-        elif golden and 30 <= rsi <= 50 and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+RSI30-50+低位+BB",round(close*1.0176,2),1.76
-    elif code == "000893":
-        # v15新发现: 金叉+RSI40-55+pos<0.3+BB<0.15+量增 WR=93.8%!
-        if golden and 40 <= rsi <= 55 and pos <= 0.3 and bb <= 0.15 and vol_ok:
-            B,R,T,P = True,"金叉+RSI40-55+超低位+BB极窄+量价",round(close*1.020,2),2.00
-        elif golden and 35 <= rsi <= 55 and pos <= 0.4 and bb <= 0.15 and vol > 1.3:
-            B,R,T,P = True,"金叉+RSI35-55+低位+BB窄+放量 WR91.7%",round(close*1.022,2),2.20
-        elif golden and 40 <= rsi <= 55 and pos <= 0.4 and bb <= 0.3 and vol_ok:
-            B,R,T,P = True,"金叉+RSI40-55+低位+BB+量价",round(close*1.020,2),2.00
-        elif golden and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+低位+BB",round(close*1.0207,2),2.07
-        elif golden and bb <= 0.3: B,R,T,P = True,"金叉+BB",round(close*1.0211,2),2.11
-    else:
-        if golden and pos < 0.4 and bb < 0.3 and vol_ok: B,R,T,P = True,"金叉+低位+BB+量价共振",round(close*1.022,2),2.20
-        elif golden and bb < 0.3 and vol_ok: B,R,T,P = True,"金叉+布林下轨+量价配合",round(close*1.017,2),1.70
-        elif golden and bb < 0.3: B,R,T,P = True,"金叉+布林下轨",round(close*1.015,2),1.50
+    if code == "600392":  # 盛和资源 WR=100.0% +1.76%
+        if golden and bb <= 0.2 and macd_t and pos <= 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB<0.2+MACD金叉+pos<0.3+量增",round(close*1.0176,2),1.76
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "002601":  # 龙佰集团 WR=93.8% +1.0%
+        if golden and bb <= 0.1 and macd_b and 35 <= rsi <= 50 and vol_ok:
+            B,R,T,P = True,"金叉+BB<0.1+RSI35-50+MACD多+量增",round(close*1.0100,2),1.0
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "603799":  # 华友钴业 WR=92.9% +2.61%
+        if golden and bb <= 0.1 and macd_t:
+            B,R,T,P = True,"金叉+BB<0.1+MACD金叉",round(close*1.0261,2),2.61
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "002240":  # 盛新锂能 WR=88.9% +1.53%
+        if golden and bb <= 0.1 and macd_b and 35 <= rsi <= 50 and vol_ok:
+            B,R,T,P = True,"金叉+BB<0.1+RSI35-50+MACD多+量增",round(close*1.0153,2),1.53
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "001337":  # 四川黄金 WR=87.0% +1.0%
+        if golden and bb <= 0.1 and macd_t:
+            B,R,T,P = True,"金叉+BB<0.1+MACD金叉",round(close*1.0100,2),1.0
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "601899":  # 紫金矿业 WR=85.7% +1.0%
+        if golden and bb <= 0.1 and macd_t and vol_ok:
+            B,R,T,P = True,"金叉+BB<0.15+MACD金叉+量增",round(close*1.0100,2),1.0
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "002155":  # 湖南黄金 WR=85.7% +1.64%
+        if golden and bb <= 0.1 and macd_t and vol_ok:
+            B,R,T,P = True,"金叉+BB<0.15+MACD金叉+量增",round(close*1.0164,2),1.64
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "159941":  # 纳指ETF广发 WR=83.3% +1.0%
+        if golden and bb <= 0.1 and macd_t:
+            B,R,T,P = True,"金叉+BB<0.1+MACD金叉",round(close*1.0100,2),1.0
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "600309":  # 万华化学 WR=82.4% +1.25%
+        if golden and bb <= 0.1 and macd_t and vol_ok:
+            B,R,T,P = True,"金叉+BB<0.15+MACD金叉+量增",round(close*1.0125,2),1.25
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "300750":  # 宁德时代 WR=82.4% +1.0%
+        if golden and bb <= 0.1 and macd_t and vol_ok:
+            B,R,T,P = True,"金叉+BB<0.15+MACD金叉+量增",round(close*1.0100,2),1.0
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "600489":  # 中金黄金 WR=81.8% +1.31%
+        if golden and bb <= 0.1 and macd_t:
+            B,R,T,P = True,"金叉+BB<0.1+MACD金叉",round(close*1.0131,2),1.31
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "601398":  # 工商银行 WR=81.8% +1.0%
+        if golden and bb <= 0.1 and macd_b and 35 <= rsi <= 50 and vol_ok:
+            B,R,T,P = True,"金叉+BB<0.1+RSI35-50+MACD多+量增",round(close*1.0100,2),1.0
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "002709":  # 天赐材料 WR=81.5% +1.79%
+        if golden and bb <= 0.1 and macd_t:
+            B,R,T,P = True,"金叉+BB<0.1+MACD金叉",round(close*1.0179,2),1.79
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "000807":  # 云铝股份 WR=81.0% +1.55%
+        if golden and bb <= 0.1 and macd_t and vol_ok:
+            B,R,T,P = True,"金叉+BB<0.15+MACD金叉+量增",round(close*1.0155,2),1.55
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "601600":  # 中国铝业 WR=80.0% +1.05%
+        if golden and bb <= 0.2 and macd_t and pos <= 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB<0.2+MACD金叉+pos<0.3+量增",round(close*1.0105,2),1.05
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "600030":  # 中信证券 WR=80.0% +1.0%
+        if golden and bb <= 0.1 and macd_t:
+            B,R,T,P = True,"金叉+BB<0.1+MACD金叉",round(close*1.0100,2),1.0
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "000737":  # 北方铜业 WR=78.9% +1.28%
+        if golden and bb <= 0.1 and macd_b and 35 <= rsi <= 50 and vol_ok:
+            B,R,T,P = True,"金叉+BB<0.1+RSI35-50+MACD多+量增",round(close*1.0128,2),1.28
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "000933":  # 神火股份 WR=75.8% +1.23%
+        if golden and bb <= 0.1 and macd_t:
+            B,R,T,P = True,"金叉+BB<0.1+MACD金叉",round(close*1.0123,2),1.23
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "002428":  # 云南锗业 WR=75.0% +1.89%
+        if golden and bb <= 0.1 and macd_t:
+            B,R,T,P = True,"金叉+BB<0.1+MACD金叉",round(close*1.0189,2),1.89
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "601168":  # 西部矿业 WR=75.0% +1.0%
+        if golden and bb <= 0.1 and 40 <= rsi <= 55 and pos <= 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB<0.15+RSI40-55+pos<0.3+量增",round(close*1.0100,2),1.0
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "000893":  # 亚钾国际 WR=73.9% +1.1%
+        if golden and bb <= 0.1 and macd_t and vol_ok:
+            B,R,T,P = True,"金叉+BB<0.15+MACD金叉+量增",round(close*1.0110,2),1.1
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "002415":  # 海康威视 WR=73.9% +1.0%
+        if golden and bb <= 0.1 and macd_b and 35 <= rsi <= 50 and vol_ok:
+            B,R,T,P = True,"金叉+BB<0.1+RSI35-50+MACD多+量增",round(close*1.0100,2),1.0
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "000960":  # 锡业股份 WR=73.7% +1.11%
+        if golden and bb <= 0.1 and 35 <= rsi <= 50 and pos <= 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB<0.15+RSI35-50+pos<0.3+量增",round(close*1.0111,2),1.11
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "300748":  # 金力永磁 WR=73.7% +1.55%
+        if golden and bb <= 0.1 and macd_t:
+            B,R,T,P = True,"金叉+BB<0.1+MACD金叉",round(close*1.0155,2),1.55
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "000831":  # 中国稀土 WR=73.3% +1.7%
+        if golden and bb <= 0.1 and macd_t and vol_ok:
+            B,R,T,P = True,"金叉+BB<0.15+MACD金叉+量增",round(close*1.0170,2),1.7
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "600160":  # 巨化股份 WR=73.3% +1.0%
+        if golden and bb <= 0.1 and macd_t and vol_ok:
+            B,R,T,P = True,"金叉+BB<0.15+MACD金叉+量增",round(close*1.0100,2),1.0
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "603993":  # 洛阳钼业 WR=72.7% +1.0%
+        if golden and bb <= 0.1 and macd_t:
+            B,R,T,P = True,"金叉+BB<0.1+MACD金叉",round(close*1.0100,2),1.0
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "002497":  # 雅化集团 WR=72.7% +1.23%
+        if golden and bb <= 0.1 and macd_t:
+            B,R,T,P = True,"金叉+BB<0.1+MACD金叉",round(close*1.0123,2),1.23
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "601138":  # 工业富联 WR=72.7% +1.0%
+        if golden and bb <= 0.1 and macd_t:
+            B,R,T,P = True,"金叉+BB<0.1+MACD金叉",round(close*1.0100,2),1.0
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "600362":  # 江西铜业 WR=72.2% +1.0%
+        if golden and bb <= 0.1 and macd_t:
+            B,R,T,P = True,"金叉+BB<0.1+MACD金叉",round(close*1.0100,2),1.0
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "601069":  # 西部黄金 WR=72.2% +1.78%
+        if golden and bb <= 0.1 and macd_t:
+            B,R,T,P = True,"金叉+BB<0.1+MACD金叉",round(close*1.0178,2),1.78
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "002407":  # 多氟多 WR=69.6% +1.35%
+        if golden and bb <= 0.1 and macd_t:
+            B,R,T,P = True,"金叉+BB<0.1+MACD金叉",round(close*1.0135,2),1.35
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "002466":  # 天齐锂业 WR=68.4% +1.0%
+        if golden and bb <= 0.1 and 40 <= rsi <= 55 and pos <= 0.4 and vol_ok:
+            B,R,T,P = True,"金叉+BB<0.15+RSI40-55+pos<0.4+量增",round(close*1.0100,2),1.0
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "601288":  # 农业银行 WR=68.2% +1.0%
+        if golden and bb <= 0.1 and macd_t and vol_ok:
+            B,R,T,P = True,"金叉+BB<0.15+MACD金叉+量增",round(close*1.0100,2),1.0
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "000630":  # 铜陵有色 WR=66.7% +1.0%
+        if golden and bb <= 0.1 and macd_t and vol_ok:
+            B,R,T,P = True,"金叉+BB<0.15+MACD金叉+量增",round(close*1.0100,2),1.0
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "002460":  # 赣锋锂业 WR=66.7% +1.18%
+        if golden and bb <= 0.1 and macd_t:
+            B,R,T,P = True,"金叉+BB<0.1+MACD金叉",round(close*1.0118,2),1.18
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "000725":  # 京东方A WR=63.0% +1.0%
+        if golden and bb <= 0.1 and macd_t:
+            B,R,T,P = True,"金叉+BB<0.1+MACD金叉",round(close*1.0100,2),1.0
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "600111":  # 北方稀土 WR=61.5% +1.0%
+        if golden and bb <= 0.1 and 30 <= rsi <= 45 and pos <= 0.2 and vol_ok:
+            B,R,T,P = True,"金叉+BB<0.15+RSI30-45+pos<0.2+量增",round(close*1.0100,2),1.0
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "300059":  # 东方财富 WR=58.3% +1.0%
+        if golden and bb <= 0.2 and pos <= 0.3 and vol_surge:
+            B,R,T,P = True,"金叉+BB<0.2+pos<0.3+放量",round(close*1.0100,2),1.0
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    elif code == "600988":  # 赤峰黄金 WR=56.7% +1.0%
+        if golden and bb <= 0.1 and macd_t:
+            B,R,T,P = True,"金叉+BB<0.1+MACD金叉",round(close*1.0100,2),1.0
+        elif golden and pos < 0.4 and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+低位+BB+量价",round(close*1.022,2),2.20
+        elif golden and bb < 0.3 and vol_ok:
+            B,R,T,P = True,"金叉+BB+量价",round(close*1.017,2),1.70
+        elif golden and bb < 0.3:
+            B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
     return B, R, T, P
 
 def score_sell(code, f):
