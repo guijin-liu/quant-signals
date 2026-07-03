@@ -28,7 +28,7 @@ def fetch_data(code):
     import baostock as bs
     bs.login()
     try:
-        cache_file = f"C:/Users/Administrator/quant_trading/data/cache/{code}_15min.csv"
+        cache_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "cache", f"{code}_15min.csv")
         if os.path.exists(cache_file):
             df = pd.read_csv(cache_file, dtype={'time': str})
             df['time'] = df['time'].astype(str).str.zfill(17)
