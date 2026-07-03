@@ -8,6 +8,8 @@ logger = logging.getLogger()
 
 PUSHPLUS_TOKEN = "f3fb5c092ba34785b6857bb45d23d4fa"
 PUSHPLUS_URL = "http://www.pushplus.plus/send"
+DEEPSEEK_KEY = os.environ.get("DEEPSEEK_KEY", "")
+DEEPSEEK_BALANCE_URL = "https://api.deepseek.com/user/balance"
 
 try:
     from stock_pool import STOCK_POOL
@@ -23,6 +25,18 @@ def push_msg(title, content):
         return ok
     except Exception as e:
         logger.error(f"Push error: {e}"); return False
+
+def check_deepseek_balance():
+    """返回 CNY 余额，失败返回 None"""
+    try:
+        r = requests.get(DEEPSEEK_BALANCE_URL,
+                        headers={"Authorization": f"Bearer {DEEPSEEK_KEY}"}, timeout=10)
+        data = r.json()
+        for b in data.get("balance_infos", []):
+            if b["currency"] == "CNY":
+                return float(b["total_balance"])
+    except: pass
+    return None
 
 def fetch_data(code):
     """纯云端数据获取 — 不依赖本地缓存"""
@@ -195,10 +209,13 @@ def scan_and_push():
     # ====== 扫描完成汇总推送 ======
     buy_count = sum(1 for r in results if r['signal'] == 'BUY')
     sell_count = sum(1 for r in results if r['signal'] == 'SELL')
-    push_msg(f"☁️ 扫描完成 {scan_time} | B{buy_count} S{sell_count} | {n_data}/{n_total}只有数据",
+    balance = check_deepseek_balance()
+    bal_str = f" | DeepSeek ¥{balance:.2f}" if balance else ""
+    warn = "\n⚠️余额不足请充值!" if balance and balance < 3 else ""
+    push_msg(f"☁️ 扫描完成 {scan_time} | B{buy_count} S{sell_count} | {n_data}/{n_total}只{bal_str}{warn}",
              f'<div style="font-size:14px;padding:10px">'
-             f'数据: {n_data}/{n_total}只 | 买入:<b style="color:#e74c3c">{buy_count}</b> | 卖出:<b style="color:#27ae60">{sell_count}</b><br>'
-             f'<span style="color:#888;font-size:11px">云端CI运行正常 | 关机也推送</span></div>')
+             f'数据: {n_data}/{n_total} | 买入:<b style="color:#e74c3c">{buy_count}</b> | 卖出:<b style="color:#27ae60">{sell_count}</b>{bal_str}<br>'
+             f'<span style="color:#888;font-size:11px">云端CI运行正常{warn}</span></div>')
 
     return results
 
