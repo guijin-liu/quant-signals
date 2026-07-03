@@ -153,8 +153,24 @@ def score_sell(code, f):
         if rsi >= 75 and pos >= 0.6: return True, "RSI超买+高位"
     return False, ""
 
+def is_trading_time():
+    """判断是否交易时间：工作日 9:15-15:00"""
+    now = datetime.now()
+    if now.weekday() >= 5:  # 周六日
+        return False
+    h, m = now.hour, now.minute
+    # 9:15-11:30 或 13:00-15:00
+    if (h == 9 and m >= 15) or (h == 10) or (h == 11 and m <= 30):
+        return True
+    if (h == 13) or (h == 14) or (h == 15 and m == 0):
+        return True
+    return False
+
 def scan_and_push():
     now = datetime.now()
+    if not is_trading_time():
+        logger.info(f"非交易时间，跳过扫描 {now.strftime('%m/%d %H:%M')}")
+        return []
     scan_time = now.strftime('%m/%d %H:%M')
     logger.info(f"Scan @ {scan_time} — 云端CI推送")
     
