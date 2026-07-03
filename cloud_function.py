@@ -25,35 +25,32 @@ def push_msg(title, content):
         logger.error(f"Push error: {e}"); return False
 
 def fetch_data(code):
+    """纯云端数据获取 — 不依赖本地缓存"""
     import baostock as bs
     bs.login()
     try:
-        cache_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "cache", f"{code}_15min.csv")
-        if os.path.exists(cache_file):
-            df = pd.read_csv(cache_file, dtype={'time': str})
-            df['time'] = df['time'].astype(str).str.zfill(17)
-            for c in ['open','high','low','close','volume']:
-                df[c] = pd.to_numeric(df[c], errors='coerce')
-        else:
-            prefix = "sh." if code.startswith(("6","9")) else "sz."
-            end = datetime.now().strftime("%Y-%m-%d")
-            start = (datetime.now() - timedelta(days=730)).strftime("%Y-%m-%d")
-            rs = bs.query_history_k_data_plus(prefix + code,
-                'date,time,open,high,low,close,volume',
-                start_date=start, end_date=end, frequency='15', adjustflag='2')
-            rows = []
-            while (rs.error_code == '0') & rs.next():
-                rows.append(rs.get_row_data())
-            if not rows:
-                bs.logout(); return pd.DataFrame()
-            df = pd.DataFrame(rows, columns=['date','time','open','high','low','close','volume'])
-            for c in ['open','high','low','close','volume']:
-                df[c] = pd.to_numeric(df[c], errors='coerce')
+        prefix = "sh." if code.startswith(("6","9")) else "sz."
+        end = datetime.now().strftime("%Y-%m-%d")
+        # 云端用60天数据即可，730天太慢
+        start = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
+        rs = bs.query_history_k_data_plus(prefix + code,
+            'date,time,open,high,low,close,volume',
+            start_date=start, end_date=end, frequency='15', adjustflag='2')
+        rows = []
+        while (rs.error_code == '0') & rs.next():
+            rows.append(rs.get_row_data())
         bs.logout()
+        if not rows:
+            logger.warning(f"{code} 无数据")
+            return pd.DataFrame()
+        df = pd.DataFrame(rows, columns=['date','time','open','high','low','close','volume'])
+        for c in ['open','high','low','close','volume']:
+            df[c] = pd.to_numeric(df[c], errors='coerce')
         return df
-    except:
+    except Exception as e:
         try: bs.logout()
         except: pass
+        logger.error(f"{code} fetch error: {e}")
         return pd.DataFrame()
 
 def compute_features(df):
@@ -144,14 +141,24 @@ def score_sell(code, f):
 
 def scan_and_push():
     now = datetime.now()
-    logger.info(f"Scan @ {now.strftime('%Y-%m-%d %H:%M:%S')}")
+    scan_time = now.strftime('%m/%d %H:%M')
+    logger.info(f"Scan @ {scan_time} — 云端CI推送")
+    
+    # ====== 先发一条诊断推送，确认云端通道畅通 ======
+    n_total = len(STOCKS)
+    push_msg(f"☁️ 云端扫描启动 {scan_time}", 
+             f'<div style="font-size:14px;padding:10px">'
+             f'<b>云端CI扫描中</b> — {n_total}只股票<br>'
+             f'<span style="color:#888;font-size:11px">GitHub Actions | 关机也能推送</span></div>')
 
     results = []
+    n_data = 0
     for code, name in STOCKS.items():
         df = fetch_data(code)
         if df.empty or len(df) < 20:
             results.append({"code":code,"name":name,"signal":"NODATA","close":0})
             continue
+        n_data += 1
         f = compute_features(df)
         buy, reason_b, target, tp = score_buy(code, f)
         sell, reason_s = score_sell(code, f)
@@ -169,23 +176,29 @@ def scan_and_push():
         if sig == "BUY":
             logger.info(f"  >>> BUY  {code} {name} @ {f['close']:.2f} +{tp}% | {reason}")
             t = r['target']; tp_val = r['target_pct']
-            push_msg(f"{name} 现价{r['close']} 建议买入 目标{t}(+{tp_val}%) T+1可卖",
+            push_msg(f"☁️{name} 现价{r['close']} 建议买入 目标{t}(+{tp_val}%)",
                      f'<div style="font-size:16px;padding:12px;line-height:2.2"><b>{name}</b> {code}<br>'
                      f'现价 <b style="color:#e74c3c;font-size:22px">{r["close"]}</b><br>'
                      f'<span style="color:#e74c3c;font-size:16px">建议买入</span><br>'
                      f'目标 <b>{t}</b> (+{tp_val}%)<br>'
                      f'T+1可卖 | {reason}<br>'
-                     f'<span style="color:#888;font-size:11px">{now.strftime("%m/%d %H:%M")} | 逐票概率</span></div>')
+                     f'<span style="color:#888;font-size:11px">{scan_time} | 云端推送</span></div>')
         elif sig == "SELL":
             logger.info(f"  >>> SELL {code} {name} @ {f['close']:.2f} | {reason}")
-            push_msg(f"{name} 现价{r['close']} 建议卖出",
+            push_msg(f"☁️{name} 现价{r['close']} 建议卖出",
                      f'<div style="font-size:16px;padding:12px;line-height:2.2"><b>{name}</b> {code}<br>'
                      f'现价 <b style="color:#27ae60;font-size:22px">{r["close"]}</b><br>'
                      f'<span style="color:#27ae60;font-size:16px">建议卖出</span><br>'
                      f'{reason}<br>'
-                     f'<span style="color:#888;font-size:11px">{now.strftime("%m/%d %H:%M")} | 逐票概率</span></div>')
-        else:
-            logger.info(f"      HOLD  {code} {name} @ {f['close']:.2f} RSI={f['rsi']:.0f} pos={f['pos']:.2f} bb={f['bb_pct']:.2f}")
+                     f'<span style="color:#888;font-size:11px">{scan_time} | 云端推送</span></div>')
+
+    # ====== 扫描完成汇总推送 ======
+    buy_count = sum(1 for r in results if r['signal'] == 'BUY')
+    sell_count = sum(1 for r in results if r['signal'] == 'SELL')
+    push_msg(f"☁️ 扫描完成 {scan_time} | B{buy_count} S{sell_count} | {n_data}/{n_total}只有数据",
+             f'<div style="font-size:14px;padding:10px">'
+             f'数据: {n_data}/{n_total}只 | 买入:<b style="color:#e74c3c">{buy_count}</b> | 卖出:<b style="color:#27ae60">{sell_count}</b><br>'
+             f'<span style="color:#888;font-size:11px">云端CI运行正常 | 关机也推送</span></div>')
 
     return results
 
