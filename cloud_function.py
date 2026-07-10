@@ -1,7 +1,9 @@
 """v13 量化买卖点 — 41只股票 逐票独立+ETF+通用 (Gitee同步)"""
 import os, sys, json, logging, requests
 import numpy as np, pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+
+BEIJING_TZ = timezone(timedelta(hours=8))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger()
@@ -44,9 +46,10 @@ def fetch_data(code):
     bs.login()
     try:
         prefix = "sh." if code.startswith(("6","9")) else "sz."
-        end = datetime.now().strftime("%Y-%m-%d")
-        # 云端用60天数据即可，730天太慢
-        start = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
+        now_bj = datetime.now(BEIJING_TZ)
+        end = now_bj.strftime("%Y-%m-%d")
+        # 云端用90天数据即可，太久太慢
+        start = (now_bj - timedelta(days=90)).strftime("%Y-%m-%d")
         rs = bs.query_history_k_data_plus(prefix + code,
             'date,time,open,high,low,close,volume',
             start_date=start, end_date=end, frequency='15', adjustflag='2')
@@ -154,12 +157,11 @@ def score_sell(code, f):
     return False, ""
 
 def is_trading_time():
-    """判断是否交易时间：工作日 9:15-15:00"""
-    now = datetime.now()
-    if now.weekday() >= 5:  # 周六日
+    """判断是否交易时间：工作日 9:15-15:00（北京时间）"""
+    now = datetime.now(BEIJING_TZ)
+    if now.weekday() >= 5:
         return False
     h, m = now.hour, now.minute
-    # 9:15-11:30 或 13:00-15:00
     if (h == 9 and m >= 15) or (h == 10) or (h == 11 and m <= 30):
         return True
     if (h == 13) or (h == 14) or (h == 15 and m == 0):
@@ -167,7 +169,7 @@ def is_trading_time():
     return False
 
 def scan_and_push():
-    now = datetime.now()
+    now = datetime.now(BEIJING_TZ)
     if not is_trading_time():
         logger.info(f"非交易时间，跳过扫描 {now.strftime('%m/%d %H:%M')}")
         return []
