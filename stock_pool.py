@@ -51,6 +51,62 @@ def get_all_stocks():
         return {code: info["name"] for code, info in STOCK_POOL_BACKUP.items()}
 
 
+def check_three_year_loss(code):
+    """检查是否连续3年亏损 — True=亏损(剔除), False=正常"""
+    import baostock as bs
+    try:
+        bs.login()
+        prefix = "sh." if code.startswith(("6", "9")) else "sz."
+        rs = bs.query_profit_data(prefix + code, year=None, quarter=4)
+        rows = []
+        while (rs.error_code == '0') & rs.next():
+            rows.append(rs.get_row_data())
+        bs.logout()
+
+        # rows: [code, year, quarter, netProfit, ...]
+        # 取最近3年Q4的归母净利润
+        profits = []
+        for r in rows:
+            try:
+                year = int(r[1])
+                profit = float(r[3]) if r[3] else 0.0
+                profits.append((year, profit))
+            except:
+                pass
+        profits.sort(key=lambda x: x[0], reverse=True)
+        recent = profits[:3]
+        if len(recent) < 3:
+            return False  # 上市不足3年，不剔除
+        # 连续3年都亏损
+        return all(p[1] < 0 for p in recent)
+    except:
+        try: bs.logout()
+        except: pass
+        return False  # 查不到就不剔除
+
+
+def filter_loss_stocks(candidates):
+    """并行过滤连续3年亏损的股票，返回正常股票列表"""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    if not candidates:
+        return []
+    results = []
+    with ThreadPoolExecutor(max_workers=10) as executor:
+        futures = {executor.submit(check_three_year_loss, c[0]): c for c in candidates}
+        for f in as_completed(futures):
+            c = futures[f]
+            try:
+                is_loss = f.result()
+                if not is_loss:
+                    results.append(c)
+            except:
+                results.append(c)  # 查不到就保留
+    removed = len(candidates) - len(results)
+    if removed:
+        logger.info(f"剔除连续3年亏损: {removed} 只")
+    return results
+
+
 # 兜底股票池（baostock挂了用）
 STOCK_POOL_BACKUP = {
     "000630": {"name": "铜陵有色", "sector": "有色金属"},

@@ -264,7 +264,16 @@ def scan_and_push():
                  f'<span style="color:#888">可能是非交易时段或市场异常</span></div>')
         return []
 
-    # ── 3. 深度分析候选股 ──
+    # ── 3. 财务过滤：剔除连续3年亏损 ──
+    try:
+        from stock_pool import filter_loss_stocks
+        before = len(candidates)
+        candidates = filter_loss_stocks(candidates)
+        logger.info(f"财务过滤: {before} → {len(candidates)} 只")
+    except:
+        pass
+
+    # ── 4. 深度分析候选股 ──
     results = []
     n_data = 0
     for code, name, daily_close, vol_ratio, change_pct in candidates:
@@ -305,7 +314,7 @@ def scan_and_push():
                      f'{reason}<br>'
                      f'<span style="color:#888;font-size:11px">{scan_time} | 云端推送</span></div>')
 
-    # ── 4. 汇总推送 ──
+    # ── 5. 汇总推送 ──
     buy_count = sum(1 for r in results if r['signal'] == 'BUY')
     sell_count = sum(1 for r in results if r['signal'] == 'SELL')
     balance = check_deepseek_balance()
