@@ -99,34 +99,27 @@ def compute_features(df):
     return f
 
 def score_buy(code, f):
-    """买入: 基于88%+高胜率买点共同DNA — BB极窄+金叉+MACD转正+量不萎缩"""
+    """买入: 金叉优先 + BB%≤0.35 + 量不萎缩 (去掉MACD, 目标65-75%胜率)"""
     golden = f["golden"]; rsi = f["rsi"]; pos = f["pos"]; bb = f["bb_pct"]
     close = f["close"]; vol = f.get("vol_ratio", 1.0)
-    macd_t = f.get("macd_turning", False)
     B, R, T, P = False, "", 0.0, 0.0
-    vol_not_dry = vol > 0.7  # 量不能极度萎缩
 
-    # === 共同DNA (所有88%+买点的共同特征) ===
-    # BB极窄(<0.15) = 波动率压缩 = 能量积蓄
-    # MACD转正 = 动量确认
-    # 量不萎缩 = 资金参与
-    # 这是从4只WR>=88%票中提取的共同模式
+    if not golden:
+        return B, R, T, P  # 无金叉，不买
 
-    if golden and bb <= 0.15 and macd_t and vol_not_dry:
-        # 完美DNA匹配 — 压缩爆发模式
-        B,R,T,P = True,"BB压缩+金叉+MACD转正(88%+DNA)",round(close*1.020,2),2.00
-    elif golden and bb <= 0.2 and macd_t and vol > 1.0:
-        # DNA放宽: BB稍宽但有量配合
-        B,R,T,P = True,"BB窄+金叉+MACD转正+量增",round(close*1.022,2),2.20
-    elif golden and bb <= 0.25 and pos <= 0.4 and vol > 1.0:
-        # 金叉+低位+量增 — 传统模式
-        B,R,T,P = True,"金叉+低位+BB窄+量增",round(close*1.018,2),1.80
-    elif golden and bb <= 0.3 and vol > 1.0:
-        # 宽松模式
-        B,R,T,P = True,"金叉+BB+量增",round(close*1.017,2),1.70
-    elif golden and bb <= 0.3:
-        # 最宽松
-        B,R,T,P = True,"金叉+BB",round(close*1.015,2),1.50
+    # 质量分级 — BB越窄+位置越低+量越大 = 信号越强
+    if bb <= 0.20 and pos <= 0.35 and vol > 1.0:
+        # 强信号: BB极窄+低位+放量
+        B,R,T,P = True,"金叉+BB窄+低位+放量(强)",round(close*1.022,2),2.20
+    elif bb <= 0.28 and pos <= 0.45 and vol > 0.8:
+        # 中信号: BB适中+中低位+量正常
+        B,R,T,P = True,"金叉+BB适中+中低位",round(close*1.018,2),1.80
+    elif bb <= 0.35 and pos <= 0.55 and vol > 0.7:
+        # 标准信号: BB放宽+不追高
+        B,R,T,P = True,"金叉+BB放宽+低位",round(close*1.015,2),1.50
+    elif bb <= 0.35 and pos <= 0.7:
+        # 宽松信号: BB达标但位置稍高
+        B,R,T,P = True,"金叉+BB达标",round(close*1.012,2),1.20
     return B, R, T, P
 
 
