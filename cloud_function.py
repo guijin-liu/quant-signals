@@ -163,12 +163,12 @@ def parallel_pre_screen(stocks, max_workers=PRE_SCREEN_WORKERS):
             if result:
                 candidates.append(result)
 
-    # 按成交额降序 → 主力资金在哪一目了然
+    # 按成交额降序 → 前150标注为量能龙头
     candidates.sort(key=lambda x: x[5], reverse=True)
-    top_n = min(MAX_DEEP_SCAN, len(candidates))
-    top_amount = sum(c[5] for c in candidates[:top_n])
-    logger.info(f"预筛完成: {len(candidates)} 只通过 → 取成交额前 {top_n} 只 (合计成交额 {top_amount/1e8:.0f}亿)")
-    return candidates[:top_n]
+    total = len(candidates)
+    top_amount = sum(c[5] for c in candidates[:min(150, total)])
+    logger.info(f"预筛完成: {total} 只通过 → 前150只合计成交额 {top_amount/1e8:.0f}亿")
+    return candidates  # 全部保留，不截断
 
 
 # ═══════════════════════════════════════════════
@@ -280,7 +280,9 @@ def scan_and_push():
     # ── 4. 深度分析候选股 ──
     results = []
     n_data = 0
-    for code, name, daily_close, vol_ratio, change_pct, amount, day_volume in candidates:
+    volume_leaders = []  # 成交额前150的信号汇总
+    for idx, (code, name, daily_close, vol_ratio, change_pct, amount, day_volume) in enumerate(candidates):
+        is_leader = idx < 150  # 成交额前150名
         df = fetch_data(code)
         if df.empty or len(df) < 20:
             continue
@@ -292,46 +294,67 @@ def scan_and_push():
         elif sell: sig, reason = "SELL", reason_s
         else: sig, reason = "HOLD", ""
 
+        amt_str = f"{amount/1e8:.2f}亿" if amount > 1e8 else f"{amount/1e4:.0f}万"
+        vol_tag = " 🔥量能龙头" if (is_leader and sig in ("BUY","SELL")) else ""
+
         r = {"code":code,"name":name,"signal":sig,"close":round(f['close'],2),
              "rsi":round(f['rsi'],1),"pos":round(f['pos'],2),"bb":round(f['bb_pct'],2),
              "golden":f['golden'],"reason":reason,
-             "target":target if target>0 else 0,"target_pct":tp if tp>0 else 0}
+             "target":target if target>0 else 0,"target_pct":tp if tp>0 else 0,
+             "amount":amount,"vol_ratio":vol_ratio,"change_pct":change_pct,
+             "is_leader":is_leader,"amt_str":amt_str}
         results.append(r)
 
         # ── 有信号立即推送 ──
         if sig == "BUY":
-            amt_str = f"{amount/1e8:.2f}亿" if amount > 1e8 else f"{amount/1e4:.0f}万"
-            logger.info(f"  >>> BUY  {code} {name} @ {f['close']:.2f} +{tp}% | 成交{amt_str} | {reason}")
-            push_msg(f"☁️{name} 现价{r['close']} 建议买入 目标{target}(+{tp}%)",
+            leader_line = f'<tr><td colspan="2" style="color:#f39c12"><b>🔥 成交额 {amt_str}</b> | 量比 {vol_ratio:.1f} | 涨幅 {change_pct:+.1f}%</td></tr>' if is_leader else ""
+            logger.info(f"  >>> BUY  {code} {name} @ {f['close']:.2f} +{tp}% | {amt_str} | {reason}")
+            push_msg(f"☁️{name} 现价{r['close']} 建议买入 目标{target}(+{tp}%){vol_tag}",
                      f'<div style="font-size:16px;padding:12px;line-height:2.2"><b>{name}</b> {code}<br>'
                      f'现价 <b style="color:#e74c3c;font-size:22px">{r["close"]}</b><br>'
                      f'<span style="color:#e74c3c;font-size:16px">建议买入</span><br>'
                      f'目标 <b>{target}</b> (+{tp}%)<br>'
-                     f'成交额 <b>{amt_str}</b> | 量比 <b>{vol_ratio:.1f}</b><br>'
-                     f'RSI:{f["rsi"]:.0f} | BB:{f["bb_pct"]:.2f} | 涨幅:{change_pct:+.1f}%<br>'
+                     f'成交额 <b>{amt_str}</b> | 量比 <b>{vol_ratio:.1f}</b> | 涨幅 <b>{change_pct:+.1f}%</b><br>'
+                     f'RSI:{f["rsi"]:.0f} | BB:{f["bb_pct"]:.2f}<br>'
                      f'{reason}<br>'
                      f'<span style="color:#888;font-size:11px">{scan_time} | v14云端推送</span></div>')
         elif sig == "SELL":
-            logger.info(f"  >>> SELL {code} {name} @ {f['close']:.2f} | {reason}")
-            push_msg(f"☁️{name} 现价{r['close']} 建议卖出",
+            logger.info(f"  >>> SELL {code} {name} @ {f['close']:.2f} | {amt_str} | {reason}")
+            push_msg(f"☁️{name} 现价{r['close']} 建议卖出{vol_tag}",
                      f'<div style="font-size:16px;padding:12px;line-height:2.2"><b>{name}</b> {code}<br>'
                      f'现价 <b style="color:#27ae60;font-size:22px">{r["close"]}</b><br>'
                      f'<span style="color:#27ae60;font-size:16px">建议卖出</span><br>'
+                     f'成交额 <b>{amt_str}</b> | 量比 <b>{vol_ratio:.1f}</b><br>'
                      f'{reason}<br>'
                      f'<span style="color:#888;font-size:11px">{scan_time} | 云端推送</span></div>')
 
-    # ── 5. 汇总推送 ──
+    # ── 5. 汇总推送 (含成交额TOP10龙虎榜) ──
     buy_count = sum(1 for r in results if r['signal'] == 'BUY')
     sell_count = sum(1 for r in results if r['signal'] == 'SELL')
+
+    # 成交额TOP10 (不管信号，展示量能龙头)
+    top10 = sorted(results, key=lambda r: r.get('amount', 0), reverse=True)[:10]
+    top_rows = ""
+    for r in top10:
+        emoji = {"BUY": "🔴", "SELL": "🟢", "HOLD": "⚪"}
+        top_rows += (f'<tr><td>{emoji.get(r["signal"],"⚪")}</td>'
+                     f'<td><b>{r["code"]}</b></td><td>{r["name"]}</td>'
+                     f'<td>{r["close"]}</td><td>{r.get("amt_str","")}</td>'
+                     f'<td>{r.get("reason","")}</td></tr>')
+
     balance = check_deepseek_balance()
     bal_str = f" | DeepSeek ¥{balance:.2f}" if balance else ""
     warn = "\n⚠️余额不足!" if balance and balance < 3 else ""
 
-    push_msg(f"☁️ 扫描完成 {scan_time} | B{buy_count} S{sell_count} | {n_data}/{n_all}只{bal_str}{warn}",
+    push_msg(f"☁️ 扫描完成 {scan_time} | B{buy_count} S{sell_count} | {n_data}只{bal_str}{warn}",
              f'<div style="font-size:14px;padding:10px">'
-             f'全市场: {n_all}只 | 深度分析: {n_data}只<br>'
+             f'全市场: {n_all}只 | 候选: {len(candidates)}只 | 分析: {n_data}只<br>'
              f'买入:<b style="color:#e74c3c">{buy_count}</b> | 卖出:<b style="color:#27ae60">{sell_count}</b>{bal_str}<br>'
-             f'<span style="color:#888;font-size:11px">v14 全A股云端CI{warn}</span></div>')
+             f'<br><b>📊 成交额TOP10</b><br>'
+             f'<table style="width:100%;font-size:12px;border-collapse:collapse">'
+             f'<tr style="background:#333;color:#fff"><th></th><th>代码</th><th>名称</th><th>价格</th><th>成交额</th><th>信号</th></tr>'
+             f'{top_rows}</table><br>'
+             f'<span style="color:#888;font-size:11px">v14 全A股 | 成交额前150标注🔥量能龙头{warn}</span></div>')
 
     return results
 
