@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.log
+*.tmp
+*.bak
+.DS_Store
+*.png
+*.jpg
+quant.log
+live_watcher.log
+live_watcher_err.log
+data/
+backtest/
+features/
+lib/
+models/
+risk/
