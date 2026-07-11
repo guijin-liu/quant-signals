@@ -1,65 +1,66 @@
 """
-股票池 — 41只A股+ETF，覆盖9大板块
-用于 cloud_function.py 逐票扫描
+股票池 — 动态拉取全部A股，过滤ST/退市，支持预筛
 """
+import logging
+from datetime import datetime
 
-STOCK_POOL = {
-    # ===== 有色金属 (12只) =====
+logger = logging.getLogger(__name__)
+
+
+def get_all_stocks():
+    """拉取全部A股（非ST、正常上市），返回 {code: name}"""
+    import baostock as bs
+    bs.login()
+    try:
+        rs = bs.query_stock_basic()
+        stocks = {}
+        while (rs.error_code == '0') & rs.next():
+            row = rs.get_row_data()
+            code_name = row[0]  # sh.600000 or sz.000001
+            name = row[1]
+            stock_type = row[4]   # 1=股票 2=指数
+            stock_status = row[5]  # 1=上市
+
+            # 只要正常上市的股票
+            if stock_type != '1' or stock_status != '1':
+                continue
+            # 跳过ST/退市
+            if any(x in name for x in ('ST', '*ST', '退')):
+                continue
+            # 提取纯代码
+            if '.' in code_name:
+                code = code_name.split('.')[1]
+            else:
+                code = code_name
+            # 跳过科创板(688)、北交所(8)、B股(9)
+            if code.startswith(('688', '8', '9')):
+                continue
+            # 只保留深市主板(00/002/003)、沪市主板(60)、创业板(30)
+            if not code.startswith(('00', '30', '60')):
+                continue
+
+            stocks[code] = name
+
+        bs.logout()
+        logger.info(f"股票池: {len(stocks)} 只 (已过滤ST/科创/北交所)")
+        return stocks
+    except Exception as e:
+        try: bs.logout()
+        except: pass
+        logger.error(f"拉取股票列表失败: {e}")
+        return {code: info["name"] for code, info in STOCK_POOL_BACKUP.items()}
+
+
+# 兜底股票池（baostock挂了用）
+STOCK_POOL_BACKUP = {
     "000630": {"name": "铜陵有色", "sector": "有色金属"},
-    "000737": {"name": "北方铜业", "sector": "有色金属"},
-    "000807": {"name": "云铝股份", "sector": "有色金属"},
     "000933": {"name": "神火股份", "sector": "有色金属"},
     "000960": {"name": "锡业股份", "sector": "有色金属"},
-    "002428": {"name": "云南锗业", "sector": "有色金属"},
-    "600362": {"name": "江西铜业", "sector": "有色金属"},
-    "601168": {"name": "西部矿业", "sector": "有色金属"},
-    "601600": {"name": "中国铝业", "sector": "有色金属"},
-    "601899": {"name": "紫金矿业", "sector": "有色金属"},
-    "603799": {"name": "华友钴业", "sector": "有色金属"},
-    "603993": {"name": "洛阳钼业", "sector": "有色金属"},
-
-    # ===== 黄金 (5只) =====
-    "001337": {"name": "四川黄金", "sector": "黄金"},
-    "002155": {"name": "湖南黄金", "sector": "黄金"},
-    "600489": {"name": "中金黄金", "sector": "黄金"},
-    "600988": {"name": "赤峰黄金", "sector": "黄金"},
-    "601069": {"name": "西部黄金", "sector": "黄金"},
-
-    # ===== 稀土永磁 (4只) =====
-    "000831": {"name": "中国稀土", "sector": "稀土"},
-    "300748": {"name": "金力永磁", "sector": "稀土"},
-    "600111": {"name": "北方稀土", "sector": "稀土"},
-    "600392": {"name": "盛和资源", "sector": "稀土"},
-
-    # ===== 化工 (6只) =====
-    "000893": {"name": "亚钾国际", "sector": "化工"},
-    "002407": {"name": "多氟多", "sector": "化工"},
-    "002601": {"name": "龙佰集团", "sector": "化工"},
-    "002709": {"name": "天赐材料", "sector": "化工"},
-    "600160": {"name": "巨化股份", "sector": "化工"},
-    "600309": {"name": "万华化学", "sector": "化工"},
-
-    # ===== 锂电池 (5只) =====
-    "002240": {"name": "盛新锂能", "sector": "锂电池"},
-    "002460": {"name": "赣锋锂业", "sector": "锂电池"},
-    "002466": {"name": "天齐锂业", "sector": "锂电池"},
     "002497": {"name": "雅化集团", "sector": "锂电池"},
+    "000893": {"name": "亚钾国际", "sector": "化工"},
+    "600362": {"name": "江西铜业", "sector": "有色金属"},
+    "601899": {"name": "紫金矿业", "sector": "有色金属"},
+    "600489": {"name": "中金黄金", "sector": "黄金"},
+    "600111": {"name": "北方稀土", "sector": "稀土"},
     "300750": {"name": "宁德时代", "sector": "锂电池"},
-
-    # ===== 科技 (3只) =====
-    "000725": {"name": "京东方A", "sector": "科技"},
-    "002415": {"name": "海康威视", "sector": "科技"},
-    "601138": {"name": "工业富联", "sector": "科技"},
-
-    # ===== 券商 (2只) =====
-    "300059": {"name": "东方财富", "sector": "券商"},
-    "600030": {"name": "中信证券", "sector": "券商"},
-
-    # ===== 银行 (2只) =====
-    "601288": {"name": "农业银行", "sector": "银行"},
-    "601398": {"name": "工商银行", "sector": "银行"},
-
-    # ===== ETF (2只) =====
-    "159941": {"name": "纳指ETF", "sector": "ETF"},
-    "513100": {"name": "纳指ETF", "sector": "ETF"},
 }
