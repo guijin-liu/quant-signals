@@ -14,7 +14,7 @@ PUSHPLUS_URL = "http://www.pushplus.plus/send"
 DEEPSEEK_KEY = os.environ.get("DEEPSEEK_KEY", "")
 DEEPSEEK_BALANCE_URL = "https://api.deepseek.com/user/balance"
 
-MAX_DEEP_SCAN = 200   # 预筛后深度分析的股票数
+MAX_DEEP_SCAN = 150   # 成交额前150名深度分析
 PRE_SCREEN_WORKERS = 12  # 并行预筛线程数
 
 
@@ -107,7 +107,7 @@ def fetch_daily_snapshot(code):
 # ═══════════════════════════════════════════════
 
 def pre_screen_one(code, name):
-    """预筛单只股票：日线快照 → 量比+涨幅过滤"""
+    """预筛单只股票：日线快照 → 成交额+量比+涨幅过滤"""
     rows = fetch_daily_snapshot(code)
     if not rows or len(rows) < 2:
         return None
@@ -118,6 +118,7 @@ def pre_screen_one(code, name):
         volume = float(latest[2])
         preclose = float(latest[4])
         change_pct = (close - preclose) / preclose * 100
+        amount = close * volume  # 成交额
 
         # === 过滤条件 ===
         # 跌超3%不要（弱势）
@@ -138,13 +139,13 @@ def pre_screen_one(code, name):
         if vol_ratio < 1.0:
             return None
 
-        return (code, name, close, vol_ratio, change_pct)
+        return (code, name, close, vol_ratio, change_pct, amount, volume)
     except:
         return None
 
 
 def parallel_pre_screen(stocks, max_workers=PRE_SCREEN_WORKERS):
-    """并行预筛全部股票，按量比排序取前 MAX_DEEP_SCAN 只"""
+    """并行预筛全部股票，按成交额排序取前 MAX_DEEP_SCAN 只"""
     candidates = []
     codes = list(stocks.items())
     total = len(codes)
@@ -162,9 +163,12 @@ def parallel_pre_screen(stocks, max_workers=PRE_SCREEN_WORKERS):
             if result:
                 candidates.append(result)
 
-    candidates.sort(key=lambda x: x[3], reverse=True)  # 量比降序
-    logger.info(f"预筛完成: {len(candidates)} 只通过 → 取前 {min(MAX_DEEP_SCAN, len(candidates))} 只深度分析")
-    return candidates[:MAX_DEEP_SCAN]
+    # 按成交额降序 → 主力资金在哪一目了然
+    candidates.sort(key=lambda x: x[5], reverse=True)
+    top_n = min(MAX_DEEP_SCAN, len(candidates))
+    top_amount = sum(c[5] for c in candidates[:top_n])
+    logger.info(f"预筛完成: {len(candidates)} 只通过 → 取成交额前 {top_n} 只 (合计成交额 {top_amount/1e8:.0f}亿)")
+    return candidates[:top_n]
 
 
 # ═══════════════════════════════════════════════
@@ -276,7 +280,7 @@ def scan_and_push():
     # ── 4. 深度分析候选股 ──
     results = []
     n_data = 0
-    for code, name, daily_close, vol_ratio, change_pct in candidates:
+    for code, name, daily_close, vol_ratio, change_pct, amount, day_volume in candidates:
         df = fetch_data(code)
         if df.empty or len(df) < 20:
             continue
@@ -296,15 +300,17 @@ def scan_and_push():
 
         # ── 有信号立即推送 ──
         if sig == "BUY":
-            logger.info(f"  >>> BUY  {code} {name} @ {f['close']:.2f} +{tp}% | {reason}")
+            amt_str = f"{amount/1e8:.2f}亿" if amount > 1e8 else f"{amount/1e4:.0f}万"
+            logger.info(f"  >>> BUY  {code} {name} @ {f['close']:.2f} +{tp}% | 成交{amt_str} | {reason}")
             push_msg(f"☁️{name} 现价{r['close']} 建议买入 目标{target}(+{tp}%)",
                      f'<div style="font-size:16px;padding:12px;line-height:2.2"><b>{name}</b> {code}<br>'
                      f'现价 <b style="color:#e74c3c;font-size:22px">{r["close"]}</b><br>'
                      f'<span style="color:#e74c3c;font-size:16px">建议买入</span><br>'
                      f'目标 <b>{target}</b> (+{tp}%)<br>'
-                     f'T+1可卖 | {reason}<br>'
-                     f'RSI:{f["rsi"]:.0f} | BB:{f["bb_pct"]:.2f}<br>'
-                     f'<span style="color:#888;font-size:11px">{scan_time} | 云端推送</span></div>')
+                     f'成交额 <b>{amt_str}</b> | 量比 <b>{vol_ratio:.1f}</b><br>'
+                     f'RSI:{f["rsi"]:.0f} | BB:{f["bb_pct"]:.2f} | 涨幅:{change_pct:+.1f}%<br>'
+                     f'{reason}<br>'
+                     f'<span style="color:#888;font-size:11px">{scan_time} | v14云端推送</span></div>')
         elif sig == "SELL":
             logger.info(f"  >>> SELL {code} {name} @ {f['close']:.2f} | {reason}")
             push_msg(f"☁️{name} 现价{r['close']} 建议卖出",
