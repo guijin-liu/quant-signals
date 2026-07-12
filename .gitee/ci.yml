@@ -34,7 +34,7 @@ stages:
             display-name: '安装依赖'
             inputs:
               script: |
-                pip install pandas numpy requests mootdx -q
+                pip install pandas numpy requests mootdx curl_cffi -q
           - step: shell@v1
             display-name: '执行扫描'
             inputs:

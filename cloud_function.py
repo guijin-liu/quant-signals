@@ -25,12 +25,17 @@ def push_msg(title, content):
         logger.error(f"Push error: {e}"); return False
 
 def fetch_data(code):
-    """获取15分钟K线 — mootdx（baostock已封）"""
+    """获取15分钟K线 — 多层降级: mootdx → 东方财富curl_cffi → 浏览器"""
     try:
-        from data.tdx_fetcher import fetch_minute_data_cloud
-        return fetch_minute_data_cloud(code, freq='15', days=730)
+        from data.unified_fetcher import fetch_minute_kline
+        return fetch_minute_kline(code, freq='15', days=730)
     except Exception as e:
-        logger.warning(f"mootdx {code} 失败: {e}")
+        logger.warning(f"unified_fetcher {code} 失败: {e}, 降级到mootdx")
+        try:
+            from data.tdx_fetcher import fetch_minute_data_cloud
+            return fetch_minute_data_cloud(code, freq='15', days=730)
+        except Exception as e2:
+            logger.warning(f"mootdx {code} 失败: {e2}")
     return pd.DataFrame()
 
 def compute_features(df):
