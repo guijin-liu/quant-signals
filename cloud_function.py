@@ -25,36 +25,13 @@ def push_msg(title, content):
         logger.error(f"Push error: {e}"); return False
 
 def fetch_data(code):
-    import baostock as bs
-    bs.login()
+    """获取15分钟K线 — mootdx（baostock已封）"""
     try:
-        cache_file = f"C:/Users/Administrator/quant_trading/data/cache/{code}_15min.csv"
-        if os.path.exists(cache_file):
-            df = pd.read_csv(cache_file, dtype={'time': str})
-            df['time'] = df['time'].astype(str).str.zfill(17)
-            for c in ['open','high','low','close','volume']:
-                df[c] = pd.to_numeric(df[c], errors='coerce')
-        else:
-            prefix = "sh." if code.startswith(("6","9")) else "sz."
-            end = datetime.now().strftime("%Y-%m-%d")
-            start = (datetime.now() - timedelta(days=730)).strftime("%Y-%m-%d")
-            rs = bs.query_history_k_data_plus(prefix + code,
-                'date,time,open,high,low,close,volume',
-                start_date=start, end_date=end, frequency='15', adjustflag='2')
-            rows = []
-            while (rs.error_code == '0') & rs.next():
-                rows.append(rs.get_row_data())
-            if not rows:
-                bs.logout(); return pd.DataFrame()
-            df = pd.DataFrame(rows, columns=['date','time','open','high','low','close','volume'])
-            for c in ['open','high','low','close','volume']:
-                df[c] = pd.to_numeric(df[c], errors='coerce')
-        bs.logout()
-        return df
-    except:
-        try: bs.logout()
-        except: pass
-        return pd.DataFrame()
+        from data.tdx_fetcher import fetch_minute_data_cloud
+        return fetch_minute_data_cloud(code, freq='15', days=730)
+    except Exception as e:
+        logger.warning(f"mootdx {code} 失败: {e}")
+    return pd.DataFrame()
 
 def compute_features(df):
     """特征计算 — BB%修正: 0=下轨, 1=上轨"""

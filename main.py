@@ -129,19 +129,19 @@ def _print_data_summary(data: dict):
 def fetch_daily_data(years: int = 5):
     """
     获取日线数据用于长期回测
-    优先使用 baostock (公司网络屏蔽东方财富/akshare)
+    数据源: mootdx (baostock已封)
     """
     import pandas as pd
     from datetime import datetime
     from data.fetcher import cache
-    from data.baostock_fetcher import fetch_daily_with_cache as bs_fetch_daily
+    from data.tdx_fetcher import fetch_daily_with_cache as tdx_fetch_daily
 
-    logger.info(f"获取近{years}年日线数据 (baostock)...")
+    logger.info(f"获取近{years}年日线数据 (mootdx)...")
 
     result = {}
     for code in STOCK_CODES:
         try:
-            df = bs_fetch_daily(code, years)
+            df = tdx_fetch_daily(code, years)
             if df is not None and not df.empty:
                 result[code] = df
                 logger.info(f"  {code} {STOCK_POOL[code]['name']}: {len(df)}条, "

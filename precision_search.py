@@ -3,7 +3,6 @@
 逐票精确买卖点搜索 — 买点要求在N日最低价附近(误差<X%), 卖点要求在N日最高价附近
 每只票独立搜索最优参数组合
 """
-import baostock as bs
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
@@ -11,7 +10,6 @@ import json, os, sys
 
 sys.stdout.reconfigure(encoding='utf-8')
 
-bs.login()
 CACHE = "C:/Users/Administrator/quant_trading/data/cache"
 
 STOCKS = {"000933":"神火","002497":"雅化","000960":"锡业","000893":"亚钾"}
@@ -252,4 +250,3 @@ with open(f"{CACHE}/precision_rules.json", "w") as f:
     json.dump(all_findings, f, ensure_ascii=False, indent=2, default=str)
 
 print(f"\nSaved: {CACHE}/precision_rules.json")
-bs.logout()

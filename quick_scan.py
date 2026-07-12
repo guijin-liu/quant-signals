@@ -91,29 +91,19 @@ def fetch_us_market():
         return {"道指": {"price": 0, "chg_pct": 0}, "纳指": {"price": 0, "chg_pct": 0}, "标普": {"price": 0, "chg_pct": 0}}
 
 def fetch_one(code):
-    """获取个股日线数据"""
-    import baostock as bs
-    bs.login()
+    """获取个股日线数据 — mootdx"""
     try:
-        prefix = "sh." if code.startswith(("6","9")) else "sz."
-        end = datetime.now().strftime("%Y-%m-%d")
-        start = (datetime.now() - timedelta(days=90)).strftime("%Y-%m-%d")
-        rs = bs.query_history_k_data_plus(prefix + code, "date,open,high,low,close,volume",
-            start_date=start, end_date=end, frequency="d", adjustflag="2")
-        rows = []
-        while (rs.error_code == '0') & rs.next():
-            rows.append(rs.get_row_data())
-        bs.logout()
-        if not rows: return pd.DataFrame()
-        df = pd.DataFrame(rows, columns=["date","open","high","low","close","volume"])
-        for c in ["open","high","low","close","volume"]:
-            df[c] = pd.to_numeric(df[c], errors="coerce")
-        df["date"] = pd.to_datetime(df["date"]); df.sort_values("date", inplace=True); df.reset_index(drop=True, inplace=True)
-        return df
-    except:
-        try: bs.logout()
-        except: pass
-        return pd.DataFrame()
+        from mootdx.quotes import Quotes
+        c = Quotes.factory(market='std')
+        df = c.bars(symbol=code, frequency=4, start=0, offset=90)
+        if df is not None and not df.empty:
+            for col in ['open','high','low','close','volume']:
+                if col in df.columns:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+            return df
+    except Exception as e:
+        logger.warning(f"mootdx {code} 失败: {e}")
+    return pd.DataFrame()
 
 def main():
     now = datetime.now()
