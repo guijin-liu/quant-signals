@@ -31,6 +31,10 @@ logger = logging.getLogger(__name__)
 def fetch_minute_kline(code, freq='15', days=180):
     """
     获取分钟K线 — 多层降级
+    数据源优先级:
+      Tier 1: mootdx (通达信直连)
+      Tier 2: 腾讯财经 (ifzq.gtimg.cn — 稳定免封)
+      Tier 3: 东方财富 curl_cffi (备用)
 
     Args:
         code: 股票代码
@@ -41,11 +45,19 @@ def fetch_minute_kline(code, freq='15', days=180):
         DataFrame with columns: date, time, open, high, low, close, volume
         与 cloud_function.py 的 compute_features() 完全兼容
     """
+    # Tier 1: mootdx
     df = _try_mootdx(code, freq, days)
     if df is not None and not df.empty:
         logger.debug(f"{code} mootdx ✅ {len(df)}条")
         return df
 
+    # Tier 2: 腾讯财经 (目前唯一稳定)
+    df = _try_tencent_kline(code, freq, days)
+    if df is not None and not df.empty:
+        logger.info(f"{code} 腾讯财经 ✅ (mootdx降级) {len(df)}条")
+        return df
+
+    # Tier 3: 东方财富 curl_cffi
     df = _try_eastmoney_kline(code, freq, days)
     if df is not None and not df.empty:
         logger.info(f"{code} 东方财富 ✅ (mootdx降级) {len(df)}条")
@@ -154,6 +166,55 @@ def _try_mootdx(code, freq, days):
     return None
 
 
+def _try_tencent_kline(code, freq, days):
+    """Tier 2: 腾讯财经 ifzq.gtimg.cn — 分钟K线"""
+    import requests as _req
+
+    try:
+        prefix = 'sh' if code.startswith(('6', '9')) else 'sz'
+        freq_key = f'm{freq}'  # m5 or m15
+        # 腾讯单次最多约320根，按需获取
+        bars_per_day = 48 if freq == '5' else 16
+        count = min(days * bars_per_day, 320)
+
+        url = f'http://ifzq.gtimg.cn/appstock/app/kline/mkline?param={prefix}{code},{freq_key},,{count}'
+        r = _req.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=15)
+        data = r.json()
+
+        tn_key = f'{prefix}{code}'
+        raw = data.get('data', {}).get(tn_key, {}).get(freq_key, [])
+        if not raw or len(raw) < 20:
+            return None
+
+        rows = []
+        for bar in raw:
+            dt_str = str(bar[0])
+            d = dt_str[:8]
+            t = dt_str[8:]
+            rows.append({
+                'date': f'{d[:4]}-{d[4:6]}-{d[6:8]}',
+                'time': t,
+                'open': float(bar[1]),
+                'close': float(bar[2]),
+                'high': float(bar[3]),
+                'low': float(bar[4]),
+                'volume': int(float(bar[5])),
+            })
+
+        df = pd.DataFrame(rows)
+        # 数值类型
+        for col in ['open', 'high', 'low', 'close', 'volume']:
+            df[col] = pd.to_numeric(df[col], errors='coerce')
+        df['date'] = df['date'].astype(str)
+        df['time'] = df['time'].astype(str)
+
+        return df
+
+    except Exception as e:
+        logger.warning(f"腾讯K线 {code} 失败: {str(e)[:80]}")
+    return None
+
+
 def _try_eastmoney_kline(code, freq, days):
     """Tier 2: 东方财富 curl_cffi"""
     try:
@@ -222,6 +283,13 @@ def health_check(codes=None):
     except:
         results["mootdx"] = "❌"
 
+    # 腾讯K线
+    try:
+        df = _try_tencent_kline("000933", "15", 30)
+        results["tencent_kline"] = "✅" if df is not None and not df.empty else "❌"
+    except:
+        results["tencent_kline"] = "❌"
+
     # 东方财富
     try:
         from data.eastmoney_fetcher import get_realtime_quote
@@ -230,7 +298,7 @@ def health_check(codes=None):
     except:
         results["eastmoney_curl_cffi"] = "❌"
 
-    # 腾讯
+    # 腾讯行情
     try:
         from data.eastmoney_fetcher import get_tencent_realtime
         tencent = get_tencent_realtime(["000933"])

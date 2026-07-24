@@ -1,4 +1,4 @@
-"""v13 量化买卖点 — 41只股票 逐票独立+ETF+通用 (Gitee同步)"""
+"""v14 量化买卖点 — 3只精选 农业银行+神火股份+赤峰黄金 (Gitee同步)"""
 import os, sys, json, logging, requests
 import numpy as np, pandas as pd
 from datetime import datetime, timedelta
@@ -13,7 +13,7 @@ try:
     from stock_pool import STOCK_POOL
     STOCKS = {code: info["name"] for code, info in STOCK_POOL.items()}
 except:
-    STOCKS = {"000933":"神火","002497":"雅化","000960":"锡业","000893":"亚钾"}
+    STOCKS = {"601288":"农业银行","000933":"神火股份","600988":"赤峰黄金"}
 
 def push_msg(title, content):
     try:
@@ -25,17 +25,12 @@ def push_msg(title, content):
         logger.error(f"Push error: {e}"); return False
 
 def fetch_data(code):
-    """获取15分钟K线 — 多层降级: mootdx → 东方财富curl_cffi → 浏览器"""
+    """获取15分钟K线 — 统一数据源（腾讯为主），回看20天足够"""
     try:
         from data.unified_fetcher import fetch_minute_kline
-        return fetch_minute_kline(code, freq='15', days=730)
+        return fetch_minute_kline(code, freq='15', days=20)
     except Exception as e:
-        logger.warning(f"unified_fetcher {code} 失败: {e}, 降级到mootdx")
-        try:
-            from data.tdx_fetcher import fetch_minute_data_cloud
-            return fetch_minute_data_cloud(code, freq='15', days=730)
-        except Exception as e2:
-            logger.warning(f"mootdx {code} 失败: {e2}")
+        logger.warning(f"统一数据源 {code} 失败: {e}")
     return pd.DataFrame()
 
 def compute_features(df):
@@ -67,36 +62,32 @@ def compute_features(df):
     return f
 
 def score_buy(code, f):
-    """买入: 逐票独立 + ETF通用 + 纳指ETF关联"""
+    """买入: 3只精选 逐票独立策略"""
     golden = f['golden']; rsi = f['rsi']; pos = f['pos']; bb = f['bb_pct']
     close = f['close']; B, R, T, P = False, "", 0.0, 0.0
 
-    # === 纳指ETF (159941/513100) — 关联纳斯达克指数 ===
-    if code in ("159941", "513100"):
-        # 布林下轨 + MACD转正 (最强的纳指ETF买点)
-        if golden and bb <= 0.25 and pos <= 0.3:
-            B,R,T,P = True,"金叉+低位+布林下轨(纳指关联)",round(close*1.022,2),2.20
-        elif golden and bb <= 0.3:
-            B,R,T,P = True,"金叉+布林下轨(纳指)",round(close*1.018,2),1.80
-        elif pos <= 0.2 and bb <= 0.2:
-            B,R,T,P = True,"超卖+布林下轨(纳指)",round(close*1.015,2),1.50
-        return B, R, T, P
-
-    if code == "000933":
+    if code == "000933":  # 神火股份 — 有色金属/煤炭周期
         if golden and bb <= 0.3: B,R,T,P = True,"金叉+布林下轨",round(close*1.016,2),1.60
         elif golden and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+低位+布林下轨",round(close*1.0135,2),1.35
-    elif code == "002497":
-        if golden and 40 <= rsi <= 55 and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+RSI40-55+低位+布林下轨",round(close*1.0252,2),2.52
-        elif golden and bb <= 0.3: B,R,T,P = True,"金叉+布林下轨",round(close*1.0224,2),2.24
-        elif golden and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+低位+布林下轨",round(close*1.0176,2),1.76
-    elif code == "000960":
+    elif code == "600988":  # 赤峰黄金 — 黄金避险，跟随金价
+        if golden and bb <= 0.25: B,R,T,P = True,"金叉+布林下轨",round(close*1.018,2),1.80
+        elif golden and pos <= 0.35 and bb <= 0.3: B,R,T,P = True,"金叉+低位+布林下轨",round(close*1.015,2),1.50
+        elif rsi <= 30 and bb <= 0.2: B,R,T,P = True,"超卖+布林下轨",round(close*1.012,2),1.20
+    elif code == "601288":  # 农业银行 — 大盘银行，低波动，高股息
+        if golden and rsi <= 40 and bb <= 0.25: B,R,T,P = True,"金叉+RSI<40+布林下轨",round(close*1.008,2),0.80
+        elif rsi <= 25 and bb <= 0.15: B,R,T,P = True,"深度超卖+布林下轨",round(close*1.006,2),0.60
+        elif golden and pos <= 0.3: B,R,T,P = True,"金叉+低位",round(close*1.005,2),0.50
+    elif code == "000893":  # 亚钾国际 — 化工/化肥周期
+        if golden and 40 <= rsi <= 55 and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+RSI40-55+低位+布林下轨",round(close*1.018,2),1.80
+        elif golden and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+低位+布林下轨",round(close*1.02,2),2.00
+        elif golden and bb <= 0.3: B,R,T,P = True,"金叉+布林下轨",round(close*1.021,2),2.10
+    elif code == "000960":  # 锡业股份 — 有色金属/半导体关联
         if golden and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+低位+布林下轨",round(close*1.022,2),2.20
-        elif golden and bb <= 0.2: B,R,T,P = True,"金叉+布林下轨",round(close*1.0259,2),2.59
-        elif golden and 30 <= rsi <= 50 and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+RSI30-50+低位+布林下轨",round(close*1.0176,2),1.76
-    elif code == "000893":
-        if golden and 40 <= rsi <= 55 and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+RSI40-55+低位+布林下轨",round(close*1.0185,2),1.85
-        elif golden and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+低位+布林下轨",round(close*1.0207,2),2.07
-        elif golden and bb <= 0.3: B,R,T,P = True,"金叉+布林下轨",round(close*1.0211,2),2.11
+        elif golden and bb <= 0.25: B,R,T,P = True,"金叉+布林下轨",round(close*1.025,2),2.50
+        elif golden and 30 <= rsi <= 50 and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+RSI30-50+低位+布林下轨",round(close*1.018,2),1.80
+    elif code == "601168":  # 西部矿业 — 有色金属/铜锌
+        if golden and bb <= 0.3: B,R,T,P = True,"金叉+布林下轨",round(close*1.018,2),1.80
+        elif golden and pos <= 0.4 and bb <= 0.3: B,R,T,P = True,"金叉+低位+布林下轨",round(close*1.015,2),1.50
     else:
         # 通用规则
         if golden and pos < 0.4 and bb < 0.3: B,R,T,P = True,"金叉+低位+布林下轨",round(close*1.02,2),2.0
@@ -104,26 +95,27 @@ def score_buy(code, f):
     return B, R, T, P
 
 def score_sell(code, f):
-    """卖出: 逐票独立 + ETF + 通用"""
+    """卖出: 3只精选 逐票独立"""
     rsi = f['rsi']; pos = f['pos']; bb = f['bb_pct']
 
-    # === 纳指ETF 卖出 ===
-    if code in ("159941", "513100"):
-        if rsi >= 70 and bb >= 0.85: return True, "RSI70+布林上轨(纳指)"
-        if rsi >= 75 and pos >= 0.7: return True, "RSI75+高位(纳指)"
-
-    if code == "000933":
+    if code == "000933":  # 神火股份
         if rsi >= 75 and pos >= 0.8 and bb >= 0.8: return True, "RSI75+高位+布林上轨"
         if rsi >= 70 and pos >= 0.8 and bb >= 0.85: return True, "RSI70+高位+布林上轨"
-    elif code == "002497":
-        if rsi >= 65 and pos >= 0.8 and bb >= 0.85: return True, "RSI65+高位+布林上轨"
-        if rsi >= 75 and pos >= 0.8 and bb >= 0.8: return True, "RSI75+高位+布林上轨"
-    elif code == "000960":
-        if rsi >= 75 and pos >= 0.6 and bb >= 0.85: return True, "RSI75+高位+布林上轨"
-        if rsi >= 65 and pos >= 0.7 and bb >= 0.85: return True, "RSI65+高位+布林上轨"
-    elif code == "000893":
+    elif code == "600988":  # 赤峰黄金
+        if rsi >= 72 and pos >= 0.75 and bb >= 0.8: return True, "RSI72+高位+布林上轨"
+        if rsi >= 68 and pos >= 0.8 and bb >= 0.85: return True, "RSI68+高位+布林上轨"
+    elif code == "601288":  # 农业银行 — 低波动，偏高就卖
+        if rsi >= 65 and pos >= 0.7 and bb >= 0.75: return True, "RSI65+高位+布林上轨"
+        if rsi >= 60 and pos >= 0.8 and bb >= 0.85: return True, "RSI60+超买+布林上轨"
+    elif code == "000893":  # 亚钾国际
         if rsi >= 75 and pos >= 0.6 and bb >= 0.8: return True, "RSI75+高位+布林上轨"
         if rsi >= 70 and pos >= 0.6 and bb >= 0.85: return True, "RSI70+高位+布林上轨"
+    elif code == "000960":  # 锡业股份
+        if rsi >= 75 and pos >= 0.6 and bb >= 0.85: return True, "RSI75+高位+布林上轨"
+        if rsi >= 65 and pos >= 0.7 and bb >= 0.85: return True, "RSI65+高位+布林上轨"
+    elif code == "601168":  # 西部矿业
+        if rsi >= 75 and pos >= 0.7 and bb >= 0.8: return True, "RSI75+高位+布林上轨"
+        if rsi >= 70 and pos >= 0.75 and bb >= 0.85: return True, "RSI70+高位+布林上轨"
     else:
         if rsi >= 70 and pos >= 0.7 and bb >= 0.8: return True, "RSI高位+布林上轨"
         if rsi >= 75 and pos >= 0.6: return True, "RSI超买+高位"

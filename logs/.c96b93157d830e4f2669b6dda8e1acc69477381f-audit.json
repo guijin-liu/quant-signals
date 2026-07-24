@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "C:\\Users\\Administrator\\quant_trading\\logs\\.c96b93157d830e4f2669b6dda8e1acc69477381f-audit.json",
+    "files": [
+        {
+            "date": 1783836741864,
+            "name": "C:\\Users\\Administrator\\quant_trading\\logs\\mcp-puppeteer-2026-07-12.log",
+            "hash": "f6599384e20b7e3dc27eeb4774476ebc9a70dcbbaeb98730da26f464defffd0d"
+        }
+    ],
+    "hashType": "sha256"
+}

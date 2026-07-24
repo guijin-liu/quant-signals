@@ -16,7 +16,7 @@ try:
     from stock_pool import STOCK_POOL
     STOCKS = {code: STOCK_POOL[code]["name"] for code in STOCK_POOL}
 except:
-    STOCKS = {"000933": "神火", "002497": "雅化", "000960": "锡业", "000893": "亚钾"}
+    STOCKS = {"601288": "农业银行", "000933": "神火股份", "600988": "赤峰黄金"}
 
 def push_msg(title, content):
     try:
@@ -91,18 +91,33 @@ def fetch_us_market():
         return {"道指": {"price": 0, "chg_pct": 0}, "纳指": {"price": 0, "chg_pct": 0}, "标普": {"price": 0, "chg_pct": 0}}
 
 def fetch_one(code):
-    """获取个股日线数据 — mootdx"""
+    """获取个股日线数据 — 统一数据源"""
     try:
-        from mootdx.quotes import Quotes
-        c = Quotes.factory(market='std')
-        df = c.bars(symbol=code, frequency=4, start=0, offset=90)
-        if df is not None and not df.empty:
-            for col in ['open','high','low','close','volume']:
-                if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors='coerce')
-            return df
+        from data.unified_fetcher import fetch_realtime_quote
+        q = fetch_realtime_quote(code)
+        if q and q.get("price", 0) > 0:
+            import pandas as pd
+            # 用腾讯实时行情构造简易DataFrame
+            return pd.DataFrame([{
+                "close": q["price"],
+                "open": q.get("open", q["price"]),
+                "high": q.get("high", q["price"]),
+                "low": q.get("low", q["price"]),
+                "volume": q.get("volume", 0),
+            }])
     except Exception as e:
-        logger.warning(f"mootdx {code} 失败: {e}")
+        logger.warning(f"unified_fetcher {code} 失败: {e}, 降级到mootdx")
+        try:
+            from mootdx.quotes import Quotes
+            c = Quotes.factory(market='std')
+            df = c.bars(symbol=code, frequency=4, start=0, offset=90)
+            if df is not None and not df.empty:
+                for col in ['open','high','low','close','volume']:
+                    if col in df.columns:
+                        df[col] = pd.to_numeric(df[col], errors='coerce')
+                return df
+        except Exception as e2:
+            logger.warning(f"mootdx {code} 也失败: {e2}")
     return pd.DataFrame()
 
 def main():
