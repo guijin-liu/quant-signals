@@ -36,7 +36,7 @@ def is_trading_time():
 # ═══════════════════════════════════════
 
 def batch_pre_screen(stocks: dict) -> list:
-    """妙想估值预筛（缓存1h），失败降级腾讯"""
+    """预筛 — 妙想估值+腾讯量能互补"""
     codes = list(stocks.keys())
     quotes = mx_fetcher.get_quotes(codes, stocks)
 
@@ -46,13 +46,14 @@ def batch_pre_screen(stocks: dict) -> list:
         if not q: continue
         price = q.get("price", 0)
         change_pct = q.get("change_pct", 0)
-        vol_ratio = q.get("vol_ratio", 0)
+        # 量比优先，妙想没有则降级扫描（不在此过滤）
+        vol_ratio = q.get("vol_ratio", 0) or q.get("turnover", 0) / 3  # 换手率÷3≈量比
         if price <= 0: continue
         if change_pct < -3 or change_pct > 9.5: continue
-        if vol_ratio < 1.0: continue
+        if vol_ratio < 0.5: continue  # 放宽到0.5，适应妙想无精确量比
 
         volume = q.get("volume", 0)
-        amount = price * volume if volume else 0
+        amount = price * volume if volume else price * q.get("mcap", 0) * q.get("turnover", 0.01) / 10000
         candidates.append((code, name, price, vol_ratio, change_pct, amount,
                           q.get("pe", 0), q.get("pb", 0), q.get("mcap", 0),
                           q.get("source", "")))

@@ -98,14 +98,14 @@ def get_stock_valuation(code: str, name: str) -> dict:
     cached = _cached(key, 3600)
     if cached: return cached
 
-    data = _mx_query(f"{name}{code} 收盘价 涨跌幅 量比 换手率 市盈率 市净率 总市值")
+    data = _mx_query(f"{name}{code} 收盘价 涨跌幅 换手率 市盈率 市净率 总市值 成交量")
     kv = _parse_kv(data)
     if not kv: return {}
 
     result = {
         "name": name, "code": code,
         "price": _num(kv, "收盘价"), "change_pct": _num(kv, "涨跌幅"),
-        "vol_ratio": _num(kv, "量比"), "turnover": _num(kv, "换手率"),
+        "turnover": _num(kv, "换手率"), "volume": _num(kv, "成交量"),
         "pe": _num(kv, "市盈率"), "pb": _num(kv, "市净率"),
         "mcap": _num(kv, "总市值"),
         "source": "mx-data",
