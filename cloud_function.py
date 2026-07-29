@@ -353,8 +353,13 @@ def scan_and_push():
 
         # ── 推送 ──
         if sig == "BUY":
+            # 妙想财务确认
+            fin = mx_fetcher.get_financial_quality(code, name)
+            fin_score, fin_label = mx_fetcher.score_financial_quality(
+                fin, {"pe": r.get("pe", 0), "pb": r.get("pb", 0)})
+
             rank_line = f'<tr><td colspan="2" style="color:#f39c12"><b>📊 成交额排名 #{vol_rank} | {amt_str}</b></td></tr>' if is_top150 else ""
-            logger.info(f"  >>> BUY #{vol_rank} {code} {name} @ {f15['close']:.2f} +{gain_pct}% → 卖点{sell_price} | {reason}")
+            logger.info(f"  >>> BUY #{vol_rank} {code} {name} @ {f15['close']:.2f} +{gain_pct}% → 卖点{sell_price} | {reason} | 财务:{fin_label}")
             push_msg(f"☁️{name} 买入 +{gain_pct}% 卖点{sell_price}{rank_tag}",
                      f'<div style="font-size:16px;padding:12px;line-height:2.2"><b>{name}</b> {code}<br>'
                      f'现价 <b style="color:#e74c3c;font-size:22px">{r["close"]}</b><br>'
@@ -363,7 +368,8 @@ def scan_and_push():
                      f'成交额 <b>{amt_str}</b> | 量比 {vol_ratio:.1f} | 排名 <b>#{vol_rank}</b><br>'
                      f'RSI:{f15["rsi"]:.0f} | K:{f15["k"]:.0f} D:{f15["d"]:.0f} J:{f15["j"]:.0f}<br>'
                      f'{reason}<br>'
-                     f'<span style="color:#888;font-size:11px">{scan_time} | v15双框架</span></div>')
+                     f'<span style="color:#27ae60;font-size:13px">📊 妙想财务: {fin_label}</span><br>'
+                     f'<span style="color:#888;font-size:11px">{scan_time} | v16 腾讯+妙想</span></div>')
         elif sig == "SELL":
             logger.info(f"  >>> SELL #{vol_rank} {code} {name} @ {f15['close']:.2f} | {reason}")
             push_msg(f"☁️{name} 卖出{rank_tag}",
@@ -372,7 +378,7 @@ def scan_and_push():
                      f'<span style="color:#27ae60;font-size:16px">建议卖出</span><br>'
                      f'成交额 <b>{amt_str}</b> | 排名 <b>#{vol_rank}</b><br>'
                      f'{reason}<br>'
-                     f'<span style="color:#888;font-size:11px">{scan_time} | v15双框架</span></div>')
+                     f'<span style="color:#888;font-size:11px">{scan_time} | v16 腾讯+妙想</span></div>')
 
     # 5. 汇总
     buy_count = sum(1 for r in results if r['signal'] == 'BUY')
@@ -392,15 +398,24 @@ def scan_and_push():
     bal_str = f" | DeepSeek ¥{balance:.2f}" if balance else ""
     warn = "\n⚠️余额不足!" if balance and balance < 3 else ""
 
+    # 妙想市场概况
+    mkt = mx_fetcher.get_market_brief()
+    mkt_line = ""
+    if mkt:
+        idx_str = f"上证{mkt.get('sh_idx', 0):+.2f}%" if mkt.get('sh_idx') else ""
+        amt_str2 = f"成交{mkt.get('sz_amount', 0)/10000:.2f}万亿" if mkt.get('sz_amount', 0) > 0 else ""
+        mkt_line = f"{idx_str} | {amt_str2}<br>" if idx_str else ""
+
     push_msg(f"☁️ {scan_time} | B{buy_count} S{sell_count} | {n_data}只{bal_str}{warn}",
              f'<div style="font-size:14px;padding:10px">'
-             f'全市场: {n_all}只 | 候选: {len(candidates)}只 | 分析: {n_data}只<br>'
+             f'{mkt_line}'
+             f'精选池: {n_all}只 | 候选: {len(candidates)}只 | 分析: {n_data}只<br>'
              f'买入:<b style="color:#e74c3c">{buy_count}</b> | 卖出:<b style="color:#27ae60">{sell_count}</b>{bal_str}<br>'
              f'<br><b>📊 成交额TOP10龙虎榜</b><br>'
              f'<table style="width:100%;font-size:12px;border-collapse:collapse">'
              f'<tr style="background:#333;color:#fff"><th>排名</th><th></th><th>代码</th><th>名称</th><th>价格</th><th>成交额</th><th>信号</th></tr>'
              f'{top_rows}</table><br>'
-             f'<span style="color:#888;font-size:11px">v16 腾讯K线+妙想财务 | 5+15min双框架 | 动态目标+7折卖点{warn}</span></div>')
+             f'<span style="color:#888;font-size:11px">v16 腾讯+妙想 | 5+15min双框架 | 7折卖点{warn}</span></div>')
 
     return results
 

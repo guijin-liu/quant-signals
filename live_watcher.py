@@ -10,6 +10,8 @@ P_TOKEN = "f3fb5c092ba34785b6857bb45d23d4fa"
 P_URL = "http://www.pushplus.plus/send"
 
 from stock_pool import STOCK_POOL_BACKUP
+import mx_fetcher
+
 STOCKS = {c: i["name"] for c, i in STOCK_POOL_BACKUP.items()}
 log.info(f"股票池: {len(STOCKS)} 只")
 state = {}
@@ -25,12 +27,21 @@ def alert(code, name, sig, f, reason, target=0, tp=0):
     emoji = "🔴" if sig == "BUY" else "🟢"
     action = "买入" if sig == "BUY" else "卖出"
     extra = f"<tr><td><b>目标</b></td><td style='color:#2ecc71;font-size:18px'>{target} (+{tp}%)</td></tr>" if sig == "BUY" else ""
+
+    # 妙想财务确认（仅买入时）
+    fin_line = ""
+    if sig == "BUY":
+        fin = mx_fetcher.get_financial_quality(code, name)
+        if fin:
+            _, fin_label = mx_fetcher.score_financial_quality(fin, {})
+            fin_line = f"<tr><td><b>📊 妙想</b></td><td style='color:#27ae60'>{fin_label}</td></tr>"
+
     push(f"{emoji}{action} {name} {f['close']:.2f}",
          f"<div style='background:#{1000 if sig=='BUY' else 100}00;color:#eee;padding:14px;border-left:4px solid {color}'><h2 style='color:{color}'>{emoji} {action}信号</h2>"
          f"<table style='width:100%;line-height:2.2'><tr><td><b>股票</b></td><td style='font-size:18px'>{name} {code}</td></tr>"
          f"<tr><td><b>现价</b></td><td style='color:{color};font-size:22px;font-weight:bold'>{f['close']:.2f}</td></tr>"
          f"<tr><td><b>RSI</b></td><td>{f['rsi']:.0f} | 位置{f['pos']:.0%} | BB{f['bb_pct']:.0%}</td></tr>"
-         f"<tr><td><b>理由</b></td><td style='color:#f39c12'>{reason}</td></tr>{extra}</table>"
+         f"<tr><td><b>理由</b></td><td style='color:#f39c12'>{reason}</td></tr>{extra}{fin_line}</table>"
          f"<p style='color:#888;font-size:11px'>{datetime.now().strftime('%m/%d %H:%M:%S')}</p></div>")
 
 import mx_fetcher

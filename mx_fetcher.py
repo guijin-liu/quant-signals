@@ -1,13 +1,26 @@
 """数据获取层 — 腾讯K线 + 妙想财务，替换baostock"""
-import logging, requests, numpy as np, pandas as pd
+import os, logging, requests, numpy as np, pandas as pd
 from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 UA = "Mozilla/5.0"
 MX_URL = "https://mkapi2.dfcfs.com/finskillshub/api/claw/query"
+MX_KEY = os.environ.get("MX_APIKEY", "")
+
+_cache = {}  # 内存缓存: {key: (data, timestamp)}
 
 def _prefix(code: str) -> str:
     return "sh" if code.startswith(("6", "9")) else "sz"
+
+def _cached(key: str, ttl: int = 3600):
+    """检查缓存是否有效，返回缓存数据或None"""
+    entry = _cache.get(key)
+    if entry and (datetime.now() - entry[1]).seconds < ttl:
+        return entry[0]
+    return None
+
+def _cache_set(key: str, data):
+    _cache[key] = (data, datetime.now())
 
 # ═══════════════════════════════════════
 # 腾讯 K 线（HTTP，不封IP，海外可用）
@@ -139,52 +152,151 @@ def get_realtime_quotes(codes: list) -> dict:
 
 
 # ═══════════════════════════════════════
-# mx-data 财务数据
+# 妙想 mx-data（东方财富权威数据库）— 主力
 # ═══════════════════════════════════════
 
-def check_three_year_loss(code: str) -> bool:
-    """mx-data查连续3年亏损 — True=亏损剔除"""
-    import os
-    from stock_pool import STOCK_POOL_BACKUP
-    name = STOCK_POOL_BACKUP.get(code, {}).get("name", code)
-    mx_key = os.environ.get("MX_APIKEY", "")
-
-    if not mx_key:
-        logger.warning("MX_APIKEY未设置，跳过财务过滤")
-        return False
-
+def _mx_query(tool_query: str) -> dict:
+    """调用mx-data API，自动节流"""
+    if not MX_KEY:
+        return {}
     try:
         r = requests.post(MX_URL,
-            headers={"Content-Type": "application/json", "apikey": mx_key},
-            json={"toolQuery": f"{name}{code}近三年每年净利润"}, timeout=30)
+            headers={"Content-Type": "application/json", "apikey": MX_KEY},
+            json={"toolQuery": tool_query}, timeout=20)
         r.raise_for_status()
-        d = r.json()
-
-        dto_list = (d.get("data", {}).get("data", {})
-                     .get("searchDataResultDTO", {}).get("dataTableDTOList", []))
-        if not dto_list:
-            return False
-
-        table = dto_list[0].get("table", {})
-        headers = table.get("headName", [])
-
-        # 提取净利润值
-        profits = []
-        for k, v in table.items():
-            if k == "headName":
-                continue
-            for val in v:
-                try:
-                    p = float(val) if val else 0
-                    profits.append(p)
-                except:
-                    pass
-
-        if len(profits) < 3:
-            return False
-        recent = profits[:3]
-        return all(p < 0 for p in recent)
-
+        return r.json()
     except Exception as e:
-        logger.error(f"财务检查({code}): {e}")
-        return False
+        logger.error(f"mx_query失败: {e}")
+        return {}
+
+def _parse_kv(data: dict) -> dict:
+    """解析mx-data返回的键值对 → {字段名: 值}"""
+    try:
+        dto = data["data"]["data"]["searchDataResultDTO"]["dataTableDTOList"][0]
+        nm = dto.get("nameMap", {})
+        tb = dto.get("table", {})
+        result = {}
+        for k, cn_name in nm.items():
+            vals = tb.get(k, [])
+            result[str(cn_name)] = vals[0] if vals else None
+        return result
+    except:
+        return {}
+
+def get_stock_valuation(code: str, name: str) -> dict:
+    """个股估值快照 — PE/PB/市值/涨跌幅/换手率（日缓存1h）"""
+    key = f"val_{code}"
+    cached = _cached(key, 3600)
+    if cached:
+        return cached
+
+    data = _mx_query(f"{name}{code} 最新价 涨跌幅 量比 换手率 PE PB 总市值")
+    kv = _parse_kv(data)
+    if not kv:
+        return {}
+
+    result = {
+        "price": _num(kv, "最新价"), "change_pct": _num(kv, "涨跌幅"),
+        "vol_ratio": _num(kv, "量比"), "turnover": _num(kv, "换手率"),
+        "pe": _num(kv, "市盈率PE(TTM)"), "pb": _num(kv, "市净率"),
+        "mcap": _num(kv, "总市值"),  # 单位:亿
+    }
+    _cache_set(key, result)
+    return result
+
+def get_financial_quality(code: str, name: str) -> dict:
+    """财务质量 — ROE/营收增速/利润率/负债率（日缓存4h）"""
+    key = f"fin_{code}"
+    cached = _cached(key, 14400)
+    if cached:
+        return cached
+
+    data = _mx_query(f"{name}{code} ROE 净利润同比增长率 营业收入同比增长率 资产负债率 毛利率")
+    kv = _parse_kv(data)
+    if not kv:
+        return {}
+
+    result = {
+        "roe": _num(kv, "净资产收益率ROE"),  # 加权ROE %
+        "profit_growth": _num(kv, "净利润同比增长率"),  # %
+        "revenue_growth": _num(kv, "营业收入同比增长率"),  # %
+        "debt_ratio": _num(kv, "资产负债率"),  # %
+        "gross_margin": _num(kv, "毛利率"),  # %
+    }
+    _cache_set(key, result)
+    return result
+
+def get_market_brief() -> dict:
+    """市场概况 — 指数涨跌+成交额（缓存30分钟）"""
+    key = "market"
+    cached = _cached(key, 1800)
+    if cached:
+        return cached
+
+    data = _mx_query("上证指数 沪深300 创业板指 今日涨跌幅 成交额")
+    kv = _parse_kv(data)
+    if not kv:
+        return {}
+
+    result = {
+        "sh_idx": _num(kv, "涨跌幅"),  # 上证涨跌幅
+        "sz_amount": _num(kv, "成交额"),  # 成交额(亿)
+        "update_time": datetime.now().strftime("%H:%M"),
+    }
+    _cache_set(key, result)
+    return result
+
+def score_financial_quality(fin: dict, val: dict) -> tuple:
+    """综合财务评分 → (score:0-5, summary:str)"""
+    score = 0
+    tags = []
+
+    # ROE > 10% → 优质
+    roe = fin.get("roe", 0)
+    if roe > 15: score += 2; tags.append(f"ROE{roe:.0f}%")
+    elif roe > 5: score += 1
+
+    # 净利润增长 > 20%
+    pg = fin.get("profit_growth", 0)
+    if pg > 50: score += 1; tags.append(f"净利+{pg:.0f}%")
+    elif pg < -20: score -= 1; tags.append(f"净利{pg:.0f}%⚠️")
+
+    # 负债率 < 50% → 健康
+    dr = fin.get("debt_ratio", 100)
+    if dr < 40: score += 1
+    elif dr > 70: score -= 1; tags.append(f"负债{dr:.0f}%")
+
+    # PE合理区间
+    pe = val.get("pe", 0)
+    if 10 < pe < 40: score += 1
+    elif pe > 100: score -= 1; tags.append(f"PE{pe:.0f}x")
+
+    # 毛利率
+    gm = fin.get("gross_margin", 0)
+    if gm > 30: score += 1
+
+    if score >= 4: label = "优质"
+    elif score >= 2: label = "良好"
+    elif score >= 0: label = "一般"
+    else: label = "谨慎"
+
+    return score, f"{label}({score}分): {' '.join(tags)}" if tags else f"{label}({score}分)"
+
+def _num(d: dict, *keys) -> float:
+    """从kv中提取数值"""
+    for k in keys:
+        v = d.get(k)
+        if v is None:
+            continue
+        try:
+            s = str(v).replace(",", "").replace("%", "").replace("亿", "").replace("万", "")
+            # 万亿单位
+            if "万亿" in str(v):
+                return float(s) * 10000
+            return float(s)
+        except:
+            pass
+    return 0
+
+# 保留旧函数兼容
+check_three_year_loss = lambda code: False  # 已由财务质量评分替代
