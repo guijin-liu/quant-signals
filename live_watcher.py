@@ -1,4 +1,4 @@
-﻿"""v19 实时买卖点监控 — 60秒轮询，信号变化秒推微信"""
+﻿"""v20 实时买卖点监控 — 60秒轮询，腾讯K线+妙想财务"""
 import os, logging, requests, time
 import numpy as np, pandas as pd
 from datetime import datetime, timedelta
@@ -9,15 +9,9 @@ log = logging.getLogger("live")
 P_TOKEN = "f3fb5c092ba34785b6857bb45d23d4fa"
 P_URL = "http://www.pushplus.plus/send"
 
-# 优先动态拉取全A股，失败则用兜底池
-try:
-    from stock_pool import get_all_stocks
-    STOCKS = get_all_stocks()
-    log.info(f"动态股票池: {len(STOCKS)} 只")
-except Exception as e:
-    from stock_pool import STOCK_POOL_BACKUP
-    STOCKS = {c: i["name"] for c, i in STOCK_POOL_BACKUP.items()}
-    log.warning(f"动态池失败({e})，兜底: {len(STOCKS)} 只")
+from stock_pool import STOCK_POOL_BACKUP
+STOCKS = {c: i["name"] for c, i in STOCK_POOL_BACKUP.items()}
+log.info(f"股票池: {len(STOCKS)} 只")
 state = {}
 
 def push(title, body):
@@ -39,28 +33,11 @@ def alert(code, name, sig, f, reason, target=0, tp=0):
          f"<tr><td><b>理由</b></td><td style='color:#f39c12'>{reason}</td></tr>{extra}</table>"
          f"<p style='color:#888;font-size:11px'>{datetime.now().strftime('%m/%d %H:%M:%S')}</p></div>")
 
+import mx_fetcher
+
 def fetch(code):
-    import baostock as bs
-    bs.login()
-    try:
-        cf = f"C:/Users/Administrator/quant_trading/data/cache/{code}_15min.csv"
-        if os.path.exists(cf):
-            df = pd.read_csv(cf, dtype={'time': str})
-            df['time'] = df['time'].astype(str).str.zfill(17)
-        else:
-            pfx = "sh." if code.startswith(("6","9")) else "sz."
-            rs = bs.query_history_k_data_plus(pfx+code, 'date,time,open,high,low,close,volume',
-                start_date=(datetime.now()-timedelta(730)).strftime("%Y-%m-%d"),
-                end_date=datetime.now().strftime("%Y-%m-%d"), frequency='15', adjustflag='2')
-            rows = [rs.get_row_data() for _ in iter(lambda: rs.next() if rs.error_code=='0' else None, None) if rs.next()]
-            if not rows: bs.logout(); return pd.DataFrame()
-            df = pd.DataFrame(rows, columns=['date','time','open','high','low','close','volume'])
-        for c in ['open','high','low','close','volume']: df[c] = pd.to_numeric(df[c], errors='coerce')
-        bs.logout(); return df
-    except:
-        try: bs.logout()
-        except: pass
-        return pd.DataFrame()
+    """腾讯15min K线"""
+    return mx_fetcher.fetch_kline(code, '15')
 
 def feat(df):
     c, h, l, v = df['close'].values, df['high'].values, df['low'].values, df['volume'].values

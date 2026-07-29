@@ -1,8 +1,11 @@
-"""v15 量化买卖点 — 5+15min双框架 + 全指标 + 动态目标 + 7折卖点 + 量能排名"""
+"""v16 量化买卖点 — 腾讯K线+妙想财务 + 5+15min双框架 + 全指标 + 动态目标 + 7折卖点 + 量能排名"""
 import os, sys, json, logging, requests
 import numpy as np, pandas as pd
 from datetime import datetime, timedelta, timezone
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+import mx_fetcher  # 腾讯K线 + 妙想财务，替换baostock
+from stock_pool import STOCK_POOL_BACKUP
 
 BEIJING_TZ = timezone(timedelta(hours=8))
 
@@ -46,93 +49,44 @@ def is_trading_time():
 
 
 # ═══════════════════════════════════════════════
-# 数据获取
+# 数据获取 — 全部走 mx_fetcher（腾讯K线 + 妙想财务）
 # ═══════════════════════════════════════════════
 
-def fetch_kline(code, freq='15'):
-    """获取K线数据 freq='5'|'15'"""
-    import baostock as bs
-    bs.login()
-    try:
-        prefix = "sh." if code.startswith(("6","9")) else "sz."
-        now_bj = datetime.now(BEIJING_TZ)
-        end = now_bj.strftime("%Y-%m-%d")
-        start = (now_bj - timedelta(days=90)).strftime("%Y-%m-%d")
-        rs = bs.query_history_k_data_plus(prefix + code,
-            'date,time,open,high,low,close,volume',
-            start_date=start, end_date=end, frequency=freq, adjustflag='2')
-        rows = []
-        while (rs.error_code == '0') & rs.next():
-            rows.append(rs.get_row_data())
-        bs.logout()
-        if not rows: return pd.DataFrame()
-        df = pd.DataFrame(rows, columns=['date','time','open','high','low','close','volume'])
-        for c in ['open','high','low','close','volume']:
-            df[c] = pd.to_numeric(df[c], errors='coerce')
-        return df
-    except:
-        try: bs.logout()
-        except: pass
-        return pd.DataFrame()
-
-def fetch_daily_snapshot(code):
-    """日线快照 — 预筛用"""
-    import baostock as bs
-    try:
-        bs.login()
-        prefix = "sh." if code.startswith(("6","9")) else "sz."
-        end = datetime.now(BEIJING_TZ).strftime("%Y-%m-%d")
-        start = (datetime.now(BEIJING_TZ) - timedelta(days=5)).strftime("%Y-%m-%d")
-        rs = bs.query_history_k_data_plus(prefix + code,
-            'date,close,volume,turn,preclose',
-            start_date=start, end_date=end, frequency='d', adjustflag='2')
-        rows = []
-        while (rs.error_code == '0') & rs.next():
-            rows.append(rs.get_row_data())
-        bs.logout()
-        if len(rows) < 2: return None
-        return rows
-    except:
-        try: bs.logout()
-        except: pass
-        return None
+fetch_kline = mx_fetcher.fetch_kline
+check_three_year_loss = mx_fetcher.check_three_year_loss
 
 
 # ═══════════════════════════════════════════════
-# 预筛
+# 预筛 — 腾讯批量实时行情
 # ═══════════════════════════════════════════════
 
-def pre_screen_one(code, name):
-    rows = fetch_daily_snapshot(code)
-    if not rows or len(rows) < 2: return None
-    try:
-        latest = rows[-1]
-        close, volume, preclose = float(latest[1]), float(latest[2]), float(latest[4])
-        change_pct = (close - preclose) / preclose * 100
-        if change_pct < -3 or change_pct > 9.5: return None
-        amount = close * volume
-        hist_vols = [float(r[2]) for r in rows[:-1] if float(r[2]) > 0]
-        if not hist_vols: return None
-        vol_ratio = volume / np.mean(hist_vols)
-        if vol_ratio < 1.0: return None
-        return (code, name, close, vol_ratio, change_pct, amount, volume)
-    except: return None
+def batch_pre_screen(stocks: dict) -> list:
+    """腾讯批量行情预筛：1次HTTP拿全部股票实时数据"""
+    codes = list(stocks.keys())
+    quotes = mx_fetcher.get_realtime_quotes(codes)
+    if not quotes:
+        logger.warning("腾讯行情拉取失败")
+        return []
 
-def parallel_pre_screen(stocks, max_workers=PRE_SCREEN_WORKERS):
     candidates = []
-    codes = list(stocks.items())
-    total = len(codes)
-    logger.info(f"预筛: {total} 只 → {max_workers}线程")
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {executor.submit(pre_screen_one, c, n): c for c, n in codes}
-        done = 0
-        for f in as_completed(futures):
-            done += 1
-            if done % 500 == 0: logger.info(f"  预筛 {done}/{total}")
-            r = f.result()
-            if r: candidates.append(r)
+    for code, name in stocks.items():
+        q = quotes.get(code)
+        if not q:
+            continue
+        close, preclose = q["price"], q["preclose"]
+        if close <= 0 or preclose <= 0:
+            continue
+        change_pct = (close - preclose) / preclose * 100
+        if change_pct < -3 or change_pct > 9.5:
+            continue
+        vol_ratio = q["vol_ratio"]
+        if vol_ratio < 1.0:
+            continue
+        amount = close * q["volume"]
+        candidates.append((code, name, close, vol_ratio, change_pct, amount, q["volume"]))
+
     candidates.sort(key=lambda x: x[5], reverse=True)
-    logger.info(f"预筛完成: {len(candidates)} 只")
+    logger.info(f"预筛: {len(stocks)}只 → {len(candidates)}只候选")
     return candidates
 
 
@@ -347,31 +301,18 @@ def scan_and_push():
         return []
     scan_time = now.strftime('%m/%d %H:%M')
 
-    # 1. 股票池
-    try:
-        from stock_pool import get_all_stocks
-        all_stocks = get_all_stocks()
-    except:
-        from stock_pool import STOCK_POOL_BACKUP
-        all_stocks = {c: i["name"] for c, i in STOCK_POOL_BACKUP.items()}
+    # 1. 股票池 — STOCK_POOL_BACKUP（10只精选，不受数据源封禁影响）
+    all_stocks = {c: i["name"] for c, i in STOCK_POOL_BACKUP.items()}
     n_all = len(all_stocks)
-    logger.info(f"☁️ v15 @ {scan_time} — {n_all}只全市场")
+    logger.info(f"☁️ v16 @ {scan_time} — {n_all}只精选池")
 
-    # 2. 预筛
-    candidates = parallel_pre_screen(all_stocks)
+    # 2. 预筛 — 腾讯批量行情
+    candidates = batch_pre_screen(all_stocks)
     if not candidates:
-        push_msg(f"☁️ 无候选 {scan_time}", f'<div>全市场{n_all}只无候选</div>')
+        push_msg(f"☁️ 无候选 {scan_time}", f'<div>精选池{n_all}只无候选</div>')
         return []
 
-    # 3. 财务过滤
-    try:
-        from stock_pool import filter_loss_stocks
-        before = len(candidates)
-        candidates = filter_loss_stocks(candidates)
-        logger.info(f"财务过滤: {before} → {len(candidates)}")
-    except: pass
-
-    # 4. 深度分析
+    # 3. 深度分析
     results = []
     n_data = 0
     for idx, (code, name, daily_close, vol_ratio, change_pct, amount, day_volume) in enumerate(candidates):
@@ -459,7 +400,7 @@ def scan_and_push():
              f'<table style="width:100%;font-size:12px;border-collapse:collapse">'
              f'<tr style="background:#333;color:#fff"><th>排名</th><th></th><th>代码</th><th>名称</th><th>价格</th><th>成交额</th><th>信号</th></tr>'
              f'{top_rows}</table><br>'
-             f'<span style="color:#888;font-size:11px">v15 双框架 | 5min+15min全指标 | 动态目标+7折卖点{warn}</span></div>')
+             f'<span style="color:#888;font-size:11px">v16 腾讯K线+妙想财务 | 5+15min双框架 | 动态目标+7折卖点{warn}</span></div>')
 
     return results
 
