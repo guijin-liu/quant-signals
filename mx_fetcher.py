@@ -211,7 +211,7 @@ def get_financial_quality(code: str, name: str) -> dict:
     if cached:
         return cached
 
-    data = _mx_query(f"{name}{code} ROE 净利润同比增长率 营业收入同比增长率 资产负债率 毛利率")
+    data = _mx_query(f"{name}{code} 净资产收益率 净利润同比增长率 营业收入同比增长率 资产负债率 毛利率")
     kv = _parse_kv(data)
     if not kv:
         return {}
@@ -283,19 +283,17 @@ def score_financial_quality(fin: dict, val: dict) -> tuple:
     return score, f"{label}({score}分): {' '.join(tags)}" if tags else f"{label}({score}分)"
 
 def _num(d: dict, *keys) -> float:
-    """从kv中提取数值"""
-    for k in keys:
-        v = d.get(k)
-        if v is None:
-            continue
-        try:
-            s = str(v).replace(",", "").replace("%", "").replace("亿", "").replace("万", "")
-            # 万亿单位
-            if "万亿" in str(v):
-                return float(s) * 10000
-            return float(s)
-        except:
-            pass
+    """从kv中提取数值，支持部分匹配"""
+    for pattern in keys:
+        for k, v in d.items():
+            if pattern in str(k) and v is not None:
+                try:
+                    s = str(v).replace(",", "").replace("%", "").replace("亿", "").replace("万", "")
+                    if "万亿" in str(v):
+                        return float(s) * 10000
+                    return float(s)
+                except:
+                    pass
     return 0
 
 # 保留旧函数兼容
