@@ -29,7 +29,7 @@ def _num(d: dict, *patterns) -> float:
         for k, v in d.items():
             if p in str(k) and v is not None:
                 try:
-                    s = str(v).replace(",", "").replace("%", "").replace("亿", "").replace("万", "")
+                    s = str(v).replace(",", "").replace("%", "").replace("亿", "").replace("万", "").replace("元", "").replace("倍", "")
                     if "万亿" in str(v): return float(s) * 10000
                     return float(s)
                 except: pass
@@ -98,13 +98,13 @@ def get_stock_valuation(code: str, name: str) -> dict:
     cached = _cached(key, 3600)
     if cached: return cached
 
-    data = _mx_query(f"{name}{code} 最新价 涨跌幅 量比 换手率 PE PB 总市值")
+    data = _mx_query(f"{name}{code} 收盘价 涨跌幅 量比 换手率 市盈率 市净率 总市值")
     kv = _parse_kv(data)
     if not kv: return {}
 
     result = {
         "name": name, "code": code,
-        "price": _num(kv, "最新价"), "change_pct": _num(kv, "涨跌幅"),
+        "price": _num(kv, "收盘价"), "change_pct": _num(kv, "涨跌幅"),
         "vol_ratio": _num(kv, "量比"), "turnover": _num(kv, "换手率"),
         "pe": _num(kv, "市盈率"), "pb": _num(kv, "市净率"),
         "mcap": _num(kv, "总市值"),
