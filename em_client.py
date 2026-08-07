@@ -56,13 +56,12 @@ FS_ALL_A = "m:0+t:6,m:0+t:80,m:0+t:81,m:1+t:2,m:1+t:23,m:1+t:3,f:8"  # 全A主�
 
 def em_fetch_top_amount(n=150) -> list:
     """全A非ST 按成交额(f6)降序取前n名（实测 f5=成交量手, f6=成交额元）。
-    东财单页 pz 上限 100，分页拉满。返回 [{code,name,amount,volume,price,chg,turnover,pe,mcap}, ...]"""
-    all_rows = []
+    东财单页 pz 上限100，固定每页100分页 + 按 code 去重（防分页重叠）。"""
+    all_rows, seen = [], set()
     pn = 1
-    while len(all_rows) < n:
-        page = min(100, n - len(all_rows))
+    while len(all_rows) < n and pn <= 5:
         params = {
-            "pn": str(pn), "pz": str(page), "po": "1", "np": "1",
+            "pn": str(pn), "pz": "100", "po": "1", "np": "1",
             "fltt": "2", "invt": "2", "dect": "1",
             "fid": "f6", "fs": FS_ALL_A,
             "fields": "f2,f3,f5,f6,f8,f9,f12,f14,f20,f21",
@@ -77,15 +76,21 @@ def em_fetch_top_amount(n=150) -> list:
             break
         if not diff:
             break
+        new = 0
         for it in diff:
+            code = it.get("f12", "")
+            if not code or code in seen:
+                continue
+            seen.add(code)
             all_rows.append({
-                "code": it.get("f12", ""), "name": it.get("f14", ""),
+                "code": code, "name": it.get("f14", ""),
                 "amount": it.get("f6", 0), "volume": it.get("f5", 0),
                 "price": it.get("f2", 0), "chg": it.get("f3", 0),
                 "turnover": it.get("f8", 0), "pe": it.get("f9", 0),
                 "mcap": it.get("f20", 0),
             })
-        if len(diff) < page:
+            new += 1
+        if new == 0:  # 本页全重复（分页未生效）→ 停止避免死循环
             break
         pn += 1
     return all_rows[:n]
