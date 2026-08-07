@@ -23,6 +23,8 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: 全量挖掘（动态池 + 东财半年15min + 资金流）
+        env:
+          MX_APIKEY: ${{ secrets.MX_APIKEY }}
         run: python backtest_miner2.py
 
       - name: commit rules2.json 回仓库

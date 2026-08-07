@@ -24,6 +24,8 @@ jobs:
         run: git pull --rebase origin master || true
 
       - name: 2号扫描（长运行模式）
+        env:
+          MX_APIKEY: ${{ secrets.MX_APIKEY }}
         run: python cloud2_function.py
 
       - name: 故障告警
