@@ -1,5 +1,5 @@
 """回溯挖掘引擎 v2.0 — 腾讯日线 + 沿用v16评分框架
-逐票回溯 → 筛选≥77%胜率的评分阈值 → 计算7折卖点
+逐票回溯 → 筛选≥77%胜率的评分阈值 → 计算9折卖点
 """
 import requests
 import numpy as np
@@ -187,8 +187,8 @@ def backtest_stock(code, name):
             'wr_0pct': round(wr_0pct*100, 1),
             'p50': round(p50, 1), 'p70': round(p70, 1),
             'p80': round(p80, 1), 'p90': round(p90, 1),
-            'sell_70': round(p70 * 0.7, 1),
-            'sell_80': round(p80 * 0.7, 1),
+            'sell_70': round(p70 * 0.9, 1),
+            'sell_80': round(p80 * 0.9, 1),
             'avg_gain': round(np.mean(gain_list), 1),
             'sample_dates': f"{trades[0]['date']}~{trades[-1]['date']}",
             'top_reason': max(set(t['reasons'] for t in trades), key=lambda r: sum(1 for t in trades if t['reasons']==r)),

@@ -1,5 +1,5 @@
 """v16.1 量化买卖点 — 数据驱动版
-逐票卖点由5年回溯挖掘（P70涨幅×0.7），替换原公式计算
+逐票卖点由5年回溯挖掘（P70涨幅×0.9），替换原公式计算
 GitHub Actions 每天 9:25 触发，内循环到 15:00 收盘"""
 import os, sys, json, logging, requests, time, re
 import numpy as np, pandas as pd
@@ -12,7 +12,7 @@ BEIJING_TZ = timezone(timedelta(hours=8))
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger()
 
-APP_NAME = "刘圭金1号"
+APP_NAME = "刘圭金1号量化程序"
 PUSHPLUS_TOKEN = "f3fb5c092ba34785b6857bb45d23d4fa"
 PUSHPLUS_URL = "http://www.pushplus.plus/send"
 WX_WEBHOOK = os.environ.get("WX_WEBHOOK", "")  # 企业微信群机器人 webhook（本地推送用）
@@ -200,7 +200,7 @@ def score_buy(code, f15, f5=None):
     if close > f15['ma20'] * 1.05: return False, "追高(>MA20+5%)", 0, 0
     if score < 3: return False, f"共振不足({score}分)", 0, 0
 
-    # v16.1 数据驱动卖点：逐票回溯P70涨幅×0.7
+    # v16.1 数据驱动卖点：逐票回溯P70涨幅×0.9
     params = STOCK_PARAMS.get(code, {})
     sell_pct = params.get('sell_pct', DEFAULT_SELL_PCT)
     hist_wr = params.get('wr', 0)
@@ -251,7 +251,7 @@ def scan_once(all_stocks):
         sig = "BUY" if buy else ("SELL" if sell else "HOLD")
         reason = reason_b if buy else (reason_s if sell else "")
 
-        # v16.1 卖点已是数据驱动(7折后)，不需要再×0.7
+        # v16.1 卖点已是数据驱动(9折后)，不需要再×0.9
         sell_price = round(f15['close'] * (1 + gain_pct / 100), 2) if buy else 0
         amt_str = f"{amount/1e8:.2f}亿" if amount > 1e8 else f"{amount/1e4:.0f}万"
 
