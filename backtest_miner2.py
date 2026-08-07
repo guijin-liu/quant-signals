@@ -248,14 +248,18 @@ def label_wins(high, close, hold_bars=8, win_pct=1.0):
 # 5. 单票回溯
 # ═══════════════════════════════════════════════
 
-def backtest_stock2(code, hold_bars=8, win_pct=1.0, start="20260101"):
-    """单票：拉K线+资金流 → 特征矩阵+资金流对齐 → 返回 (feature_df, win1, win2, gain)"""
+def backtest_stock2(code, name="", hold_bars=8, win_pct=1.0, start="20260101"):
+    """单票：拉K线+资金流 → 特征矩阵+资金流对齐 → 返回 (feature_df, win1, win2, gain)
+    资金流优先东财，被拒/空则用妙想兜底（妙想个人API不受 push2his 风控）"""
     df = em_client.em_fetch_kline_15m(code, start)
     if df.empty or len(df) < 100:
         return None
-    # 东财K线被拒(腾讯兜底≤120根)时跳过资金流，避免东财重试浪费；东财通(≥300根)才拉资金流
+    # 东财K线被拒(腾讯兜底≤120根)时跳过东财资金流；东财通(≥300根)才拉东财资金流
     em_ok = len(df) > 300
     fund = em_client.em_fund_flow_120d(code) if em_ok else []
+    if not fund and name:  # 东财资金流空 → 妙想兜底（近120交易日）
+        import mx_fetcher
+        fund = mx_fetcher.mx_fund_flow(code, name)
     fund_by_date = {r["date"]: r for r in fund}
 
     f = compute_feature_matrix(df["close"].values, df["high"].values,
@@ -263,7 +267,13 @@ def backtest_stock2(code, hold_bars=8, win_pct=1.0, start="20260101"):
     if f.empty:
         return None
     # 资金流按交易日对齐到15min bar（bar日期取 date[:10]）
-    dates = [str(d)[:10] for d in df["date"].tolist()]
+    # 资金流按交易日对齐到15min bar（腾讯date="20260807"需转"2026-08-07"）
+    def _norm_date(d):
+        s = str(d)[:10]
+        if len(s) == 8 and "-" not in s:
+            s = f"{s[:4]}-{s[4:6]}-{s[6:8]}"
+        return s
+    dates = [_norm_date(d) for d in df["date"].tolist()]
     main_net = np.array([fund_by_date.get(d, {}).get("main_net", 0) for d in dates])
     super_net = np.array([fund_by_date.get(d, {}).get("super_net", 0) for d in dates])
     large_net = np.array([fund_by_date.get(d, {}).get("large_net", 0) for d in dates])
@@ -311,7 +321,7 @@ def mine(stocks, hold_bars=8, win_pct=1.0, wr_target=85, min_n=30, start="202601
 
     done = 0
     for code in codes:
-        res = backtest_stock2(code, hold_bars, win_pct, start)
+        res = backtest_stock2(code, stocks[code], hold_bars, win_pct, start)
         if res is None:
             continue
         f, win1, win2, gain = res

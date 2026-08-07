@@ -184,6 +184,58 @@ def score_financial_quality(fin: dict, val: dict) -> tuple:
     return score, f"{label}({score}分): {' '.join(tags)}" if tags else f"{label}({score}分)"
 
 
+def _parse_money(s):
+    """'1325万元'→13250000元; '-1.58亿元'→-158000000; '1.58万亿'→元"""
+    try:
+        s = str(s).replace(",", "").replace("元", "").strip()
+        if "万亿" in s: return float(s.replace("万亿", "")) * 1e12
+        if "亿" in s: return float(s.replace("亿", "")) * 1e8
+        if "万" in s: return float(s.replace("万", "")) * 1e4
+        return float(s)
+    except:
+        return 0.0
+
+
+def mx_fund_flow(code: str, name: str) -> list:
+    """妙想主力资金流向（近30日，日级，单位元）。返回 [{date, main_net, super_net, large_net}, ...]
+    走 mkapi2.dfcfs.com，不受东财 push2his IP 风控影响。"""
+    raw = _mx_query(f"{name}{code} 近120个交易日主力资金流向")
+    try:
+        dto_list = raw["data"]["data"]["searchDataResultDTO"]["dataTableDTOList"]
+        for dto in dto_list:
+            nm = dto.get("nameMap", {})
+            tb = dto.get("table", {})
+            if not isinstance(nm, dict) or not isinstance(tb, dict):
+                continue
+            main_key = super_key = large_key = None
+            for k, cn in nm.items():
+                s = str(cn)
+                if "主力净流入" in s: main_key = k
+                elif "超大单净流入" in s: super_key = k
+                elif "大单净流入" in s: large_key = k
+            if main_key is None:
+                continue
+            dates = tb.get("headName", []) or []
+            vals = tb.get(main_key, []) or []
+            svals = tb.get(super_key, []) or []
+            lvals = tb.get(large_key, []) or []
+            rows = []
+            for i, d in enumerate(dates):
+                if i >= len(vals) or vals[i] in (None, ""):
+                    continue
+                rows.append({
+                    "date": str(d)[:10],
+                    "main_net": _parse_money(vals[i]),
+                    "super_net": _parse_money(svals[i]) if i < len(svals) else 0,
+                    "large_net": _parse_money(lvals[i]) if i < len(lvals) else 0,
+                })
+            if rows:
+                return rows
+    except Exception as e:
+        logger.error(f"mx_fund_flow({code}): {e}")
+    return []
+
+
 # ═══════════════════════════════════════════════
 # 备用：腾讯 HTTP（仅 mx-data 不支持的 K 线序列）
 # ═══════════════════════════════════════════════
