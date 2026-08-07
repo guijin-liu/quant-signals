@@ -1,27 +1,61 @@
-"""v16 量化买卖点 — 长运行模式：单次触发，内循环扫描全天
-GitHub Actions 每天 9:25 触发一次，脚本内循环到 15:00 收盘退出
-解决高频 cron 被 GitHub 跳过的致命问题"""
-import os, sys, json, logging, requests, time
+"""v16.1 量化买卖点 — 数据驱动版
+逐票卖点由5年回溯挖掘（P70涨幅×0.7），替换原公式计算
+GitHub Actions 每天 9:25 触发，内循环到 15:00 收盘"""
+import os, sys, json, logging, requests, time, re
 import numpy as np, pandas as pd
 from datetime import datetime, timedelta, timezone
 
 import mx_fetcher
-from stock_pool import STOCK_POOL_BACKUP
+from stock_pool import STOCK_POOL, STOCK_PARAMS, DEFAULT_SELL_PCT
 
 BEIJING_TZ = timezone(timedelta(hours=8))
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger()
 
+APP_NAME = "刘圭金1号"
 PUSHPLUS_TOKEN = "f3fb5c092ba34785b6857bb45d23d4fa"
 PUSHPLUS_URL = "http://www.pushplus.plus/send"
+WX_WEBHOOK = os.environ.get("WX_WEBHOOK", "")  # 企业微信群机器人 webhook（本地推送用）
 DEEPSEEK_KEY = os.environ.get("DEEPSEEK_KEY", "")
 
 # ═══════════════════════════════════════
 # 推送（带重试）
 # ═══════════════════════════════════════
 
+def html_to_wx(text):
+    """HTML转企业微信markdown文本"""
+    text = text.replace("<br>", "\n").replace("<br/>", "\n")
+    text = re.sub(r"</tr>", "\n", text)
+    text = re.sub(r"<td[^>]*>", "  ", text)
+    text = re.sub(r"</td>", "", text)
+    text = re.sub(r"<h3[^>]*>", "**", text)
+    text = re.sub(r"</h3>", "**\n", text)
+    text = re.sub(r"<[^>]+>", "", text)
+    text = re.sub(r"&nbsp;", " ", text)
+    text = re.sub(r"&#x[0-9a-fA-F]+;", "", text)
+    return text.strip()
+
 def push_msg(title, content, retries=3):
-    """PushPlus推送，失败自动重试"""
+    """推送：本地有企业微信webhook走企业微信，否则 PushPlus（云端用），失败自动重试"""
+    if WX_WEBHOOK:
+        md = f"## {title}\n{html_to_wx(content)}"
+        for attempt in range(retries):
+            try:
+                r = requests.post(WX_WEBHOOK,
+                    json={"msgtype": "markdown", "markdown": {"content": md}}, timeout=15)
+                j = r.json()
+                if j.get("errcode") == 0:
+                    logger.info(f"WX PUSH OK: {title}")
+                    return True
+                logger.warning(f"WX API返回异常: {str(j)[:120]}")
+            except Exception as e:
+                logger.warning(f"WX异常(第{attempt+1}次): {e}")
+            if attempt < retries - 1:
+                time.sleep(2 * (attempt + 1))
+        logger.error(f"WX PUSH FAIL(重试{retries}次后): {title}")
+        return False
+
+    # PushPlus 路径（云端 GitHub Actions 无 WX_WEBHOOK 时走这里）
     for attempt in range(retries):
         try:
             r = requests.post(PUSHPLUS_URL,
@@ -148,7 +182,7 @@ def compute_features(df):
 # 买卖点评分
 # ═══════════════════════════════════════
 
-def score_buy(f15, f5=None):
+def score_buy(code, f15, f5=None):
     if not f15: return False, "", 0, 0
     close = f15['close']; score = 0; reasons = []
     if f15['golden']: score += 2; reasons.append("金叉")
@@ -165,13 +199,19 @@ def score_buy(f15, f5=None):
     if f5 and f5.get('golden'): score += 1; reasons.append("5min确认")
     if close > f15['ma20'] * 1.05: return False, "追高(>MA20+5%)", 0, 0
     if score < 3: return False, f"共振不足({score}分)", 0, 0
-    bb_w = f15['bb_width']; atr_pct = f15['atr'] / close
-    vol_boost = min(1.5, f15['vol_ratio'])
-    predicted_gain = atr_pct * 100 * (2.0 + max(0, 0.15-bb_w)*20 + (vol_boost-1)*0.5)
-    predicted_gain = round(max(1.0, min(8.0, predicted_gain)), 1)
-    target = round(close * (1 + predicted_gain/100), 2)
+
+    # v16.1 数据驱动卖点：逐票回溯P70涨幅×0.7
+    params = STOCK_PARAMS.get(code, {})
+    sell_pct = params.get('sell_pct', DEFAULT_SELL_PCT)
+    hist_wr = params.get('wr', 0)
+    hist_n = params.get('n', 0)
+
+    target = round(close * (1 + sell_pct/100), 2)
     signal = "强" if score >= 4 else "标准"
-    return True, f"{signal}({score}分):{'+'.join(reasons)}", target, predicted_gain
+    reason_str = f"{signal}({score}分):{'+'.join(reasons)}"
+    if hist_n > 0:
+        reason_str += f" [回测:{hist_wr:.0f}%n={hist_n}]"
+    return True, reason_str, target, sell_pct
 
 def score_sell(f15, predicted_gain_pct):
     rsi = f15['rsi']; pos = f15['pos']; bb = f15['bb_pct']
@@ -206,12 +246,13 @@ def scan_once(all_stocks):
         df5 = mx_fetcher.fetch_kline(code, '5')
         f5 = compute_features(df5) if (not df5.empty and len(df5) >= 26) else None
 
-        buy, reason_b, target, gain_pct = score_buy(f15, f5)
+        buy, reason_b, target, gain_pct = score_buy(code, f15, f5)
         sell, reason_s = score_sell(f15, gain_pct)
         sig = "BUY" if buy else ("SELL" if sell else "HOLD")
         reason = reason_b if buy else (reason_s if sell else "")
 
-        sell_price = round(f15['close'] * (1 + gain_pct * 0.7 / 100), 2) if buy else 0
+        # v16.1 卖点已是数据驱动(7折后)，不需要再×0.7
+        sell_price = round(f15['close'] * (1 + gain_pct / 100), 2) if buy else 0
         amt_str = f"{amount/1e8:.2f}亿" if amount > 1e8 else f"{amount/1e4:.0f}万"
 
         r = {"code":code,"name":name,"signal":sig,"close":round(f15['close'],2),
@@ -246,14 +287,14 @@ def push_signal(r, scan_time):
         fin_score, fin_label = mx_fetcher.score_financial_quality(fin, {"pe": pe, "pb": pb})
 
         logger.info(f"  >>> BUY {code} {name} @{close} +{gain_pct}% 卖点{sell_price} | {r['reason']} | 妙想:{fin_label}")
-        push_msg(f"🔴买入 {name} {close} +{gain_pct}%",
+        push_msg(f"🔴{APP_NAME}买入 {name} {close} +{gain_pct}%",
                  f'<div style="font-size:15px;padding:12px;line-height:2">'
                  f'<h3 style="color:#e74c3c">🔴 买入信号 — {name}({code})</h3>'
                  f'<table style="width:100%">'
                  f'<tr><td>现价</td><td><b style="color:#e74c3c;font-size:20px">{close}</b></td>'
                  f'<td>涨跌</td><td style="color:#e74c3c">{change_pct:+.2f}%</td></tr>'
-                 f'<tr><td>目标价</td><td><b style="color:#2ecc71">{target}</b> (+{gain_pct}%)</td>'
-                 f'<td>7折卖点</td><td style="color:#f39c12"><b>{sell_price}</b> (+{round(gain_pct*0.7,1)}%)</td></tr>'
+                 f'<tr><td>卖点</td><td><b style="color:#f39c12">{target}</b> (+{gain_pct}%)</td>'
+                 f'<td>止盈</td><td style="color:#2ecc71"><b>{sell_price}</b></td></tr>'
                  f'<tr><td>PE</td><td>{pe:.1f}</td><td>PB</td><td>{pb:.2f}</td></tr>'
                  f'<tr><td>市值</td><td>{mcap_str}</td><td>量比</td><td>{vol_ratio:.1f}</td></tr>'
                  f'<tr><td>成交额</td><td>{amt_str}</td><td>排名</td><td>#{vol_rank}</td></tr>'
@@ -262,11 +303,12 @@ def push_signal(r, scan_time):
                  f'<tr><td>信号</td><td style="color:#f39c12">{r["reason"]}</td>'
                  f'<td>妙想</td><td style="color:#27ae60">{fin_label}</td></tr>'
                  f'</table>'
-                 f'<p style="color:#888;font-size:11px">{scan_time} | v16 妙想+腾讯</p></div>')
+                 f'<p style="color:#888;font-size:12px">⚠️ T+1：今日买入，最快明日才能卖</p>'
+                 f'<p style="color:#888;font-size:11px">{scan_time} | {APP_NAME} v16.1 数据驱动 | 腾讯K线+妙想财务</p></div>')
 
     elif r['signal'] == 'SELL':
         logger.info(f"  >>> SELL {code} {name} @{close} | {r['reason']}")
-        push_msg(f"🟢卖出 {name} {close}",
+        push_msg(f"🟢{APP_NAME}卖出 {name} {close}",
                  f'<div style="font-size:15px;padding:12px;line-height:2">'
                  f'<h3 style="color:#27ae60">🟢 卖出信号 — {name}({code})</h3>'
                  f'<table style="width:100%">'
@@ -278,7 +320,7 @@ def push_signal(r, scan_time):
                  f'<tr><td>PE</td><td>{pe:.1f}</td><td>PB</td><td>{pb:.2f}</td></tr>'
                  f'<tr><td>理由</td><td style="color:#f39c12">{r["reason"]}</td></tr>'
                  f'</table>'
-                 f'<p style="color:#888;font-size:11px">{scan_time} | v16 妙想+腾讯</p></div>')
+                 f'<p style="color:#888;font-size:11px">{scan_time} | {APP_NAME} v16.1 数据驱动</p></div>')
 
 
 def push_summary(results, scan_time, n_all, n_candidates, mkt):
@@ -297,7 +339,7 @@ def push_summary(results, scan_time, n_all, n_candidates, mkt):
 
     mkt_line = f"上证{mkt.get('sh_idx', 0):+.2f}% | 成交{mkt.get('sz_amount', 0)/10000:.2f}万亿" if mkt else ""
 
-    push_msg(f"☁️{scan_time} B{buy_count} S{sell_count}",
+    push_msg(f"☁️{APP_NAME} {scan_time} B{buy_count} S{sell_count}",
              f'<div style="font-size:14px;padding:10px">'
              f'<b>{mkt_line}</b><br>'
              f'妙想预筛: {n_all}只→{n_candidates}候选→{len(results)}分析<br>'
@@ -305,7 +347,7 @@ def push_summary(results, scan_time, n_all, n_candidates, mkt):
              f'<br><b>排名 | 代码 | 名称 | 价格 | 成交额 | PE | 信号</b><br>'
              f'<table style="width:100%;font-size:11px;border-collapse:collapse">'
              f'{top_rows}</table>'
-             f'<br><span style="color:#888;font-size:10px">v16 妙想主力+腾讯K线 | 5+15min双框架 | 7折卖点</span></div>')
+             f'<br><span style="color:#888;font-size:10px">{APP_NAME} v16.1 数据驱动 | 腾讯K线+妙想 | 回溯卖点</span></div>')
 
 
 # ═══════════════════════════════════════
@@ -315,18 +357,22 @@ def push_summary(results, scan_time, n_all, n_candidates, mkt):
 def main_loop():
     """单次触发，内循环扫描全天。9:25→15:00，每5分钟一轮"""
     start_time = bj_now()
-    logger.info(f"═══ v16 长运行模式启动 @ {start_time.strftime('%m/%d %H:%M')} ═══")
+    logger.info(f"═══ {APP_NAME} v16.1 数据驱动版启动 @ {start_time.strftime('%m/%d %H:%M')} ═══")
 
     # 非交易日直接退出
     if not is_trading_day():
         logger.info(f"非交易日({start_time.strftime('%A')})，退出")
         return
 
-    all_stocks = {c: i["name"] for c, i in STOCK_POOL_BACKUP.items()}
+    all_stocks = {c: STOCK_POOL[c] for c in STOCK_POOL}
     n_all = len(all_stocks)
+
+    logger.info(f"v16.1 数据驱动版 | {n_all}只票 | 数据源: 腾讯K线+妙想财务")
 
     # 已推送信号去重 key: (code, signal_type, target_price_rounded)
     pushed = set()
+    # T+1规则：今日已提示买入的票，当日不再提示卖出（当天买入次日方可卖）
+    bought_today = set()
     # 记录全天所有信号用于收盘汇总
     all_day_signals = {}  # key: (code, signal) → latest result
 
@@ -380,15 +426,22 @@ def main_loop():
         # 去重 + 推送
         new_signals = 0
         for r in signals:
-            key = (r['code'], r['signal'], round(r.get('target', r['close']), 1))
+            code = r['code']
+            # T+1：当日已提示买入的票，跳过卖出推送（当天买入次日方可卖）
+            if r['signal'] == 'SELL' and code in bought_today:
+                logger.info(f"T+1限制: {code}{r['name']} 今日已提示买入，跳过当日卖出推送")
+                continue
+            key = (code, r['signal'], round(r.get('target', r['close']), 1))
             if key not in pushed:
                 pushed.add(key)
-                all_day_signals[(r['code'], r['signal'])] = r
+                all_day_signals[(code, r['signal'])] = r
+                if r['signal'] == 'BUY':
+                    bought_today.add(code)
                 try:
                     push_signal(r, scan_time)
                     new_signals += 1
                 except Exception as e:
-                    logger.error(f"推送异常 {r['code']}: {e}")
+                    logger.error(f"推送异常 {code}: {e}")
                 time.sleep(0.5)  # 推送间隔，避免限流
 
         logger.info(f"第{scan_count}轮完成: {len(results)}分析, {len(signals)}信号, {new_signals}新推送")
@@ -426,7 +479,7 @@ def main_loop():
             buy_lines = "<br>".join(
                 f"🔴 {r['code']} {r['name']} @{r['close']} → 目标{r['target']} (+{r['gain_pct']}%) | {r['reason']}"
                 for r in buy_signals)
-            push_msg(f"📊收盘买入汇总({len(buy_signals)}只) {end_str}", f'<div style="font-size:14px;padding:10px">{buy_lines}</div>')
+            push_msg(f"📊{APP_NAME}收盘买入汇总({len(buy_signals)}只) {end_str}", f'<div style="font-size:14px;padding:10px">{buy_lines}<p style="color:#888;font-size:12px">⚠️ T+1：今日买入的票，最快明日才能卖出</p></div>')
 
         if sell_signals:
             sell_lines = "<br>".join(
@@ -437,7 +490,7 @@ def main_loop():
         push_msg(f"☁️{end_str} 全天无信号", f'<div>{n_all}只监控，全天{scan_count}轮扫描无买入/卖出信号</div>')
 
     runtime = (end_time - start_time).total_seconds() / 60
-    logger.info(f"v16 长运行结束，总运行 {runtime:.0f} 分钟")
+    logger.info(f"v16.1 运行结束，总运行 {runtime:.0f} 分钟")
 
 
 if __name__ == "__main__":

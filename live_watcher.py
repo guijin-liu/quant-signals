@@ -9,10 +9,9 @@ log = logging.getLogger("live")
 P_TOKEN = "f3fb5c092ba34785b6857bb45d23d4fa"
 P_URL = "http://www.pushplus.plus/send"
 
-from stock_pool import STOCK_POOL_BACKUP
-import mx_fetcher
+from stock_pool import STOCK_POOL
 
-STOCKS = {c: i["name"] for c, i in STOCK_POOL_BACKUP.items()}
+STOCKS = STOCK_POOL  # v16.1: {code: name}
 log.info(f"股票池: {len(STOCKS)} 只")
 state = {}
 

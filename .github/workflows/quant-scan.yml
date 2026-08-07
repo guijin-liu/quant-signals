@@ -2,14 +2,14 @@ name: 量化买卖点扫描
 
 on:
   schedule:
-    # 北京时间 9:25 触发一次（UTC 1:25），脚本内循环扫描到15:00
-    - cron: '25 1 * * 1-5'
+    # 北京时间 6:00 触发（UTC 前夜22:00），提前启动对冲GitHub cron延迟，内循环扫描到15:30
+    - cron: '0 22 * * 0-4'
   workflow_dispatch:
 
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 600
 
     steps:
       - uses: actions/checkout@v4
@@ -31,6 +31,7 @@ jobs:
       - name: 量化扫描（长运行模式）
         env:
           DEEPSEEK_KEY: ${{ secrets.DEEPSEEK_KEY }}
+          MX_APIKEY: ${{ secrets.MX_APIKEY }}
         run: python cloud_function.py
 
       - name: 故障告警

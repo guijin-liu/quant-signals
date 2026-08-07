@@ -80,7 +80,7 @@ def get_quotes(codes: list, stocks: dict) -> dict:
         for code in need_fetch:
             name = stocks.get(code, {}).get("name", code) if isinstance(stocks.get(code), dict) else stocks.get(code, code)
             val = get_stock_valuation(code, name)
-            if val:
+            if val and val.get("price", 0) > 0:
                 result[code] = val
 
     # 妙想拿不到的降级腾讯
@@ -98,13 +98,13 @@ def get_stock_valuation(code: str, name: str) -> dict:
     cached = _cached(key, 3600)
     if cached: return cached
 
-    data = _mx_query(f"{name}{code} 收盘价 涨跌幅 换手率 市盈率 市净率 总市值 成交量")
+    data = _mx_query(f"{name}{code} 最新价 涨跌幅 换手率 市盈率 市净率 总市值 成交量")
     kv = _parse_kv(data)
     if not kv: return {}
 
     result = {
         "name": name, "code": code,
-        "price": _num(kv, "收盘价"), "change_pct": _num(kv, "涨跌幅"),
+        "price": _num(kv, "最新价"), "change_pct": _num(kv, "涨跌幅"),
         "turnover": _num(kv, "换手率"), "volume": _num(kv, "成交量"),
         "pe": _num(kv, "市盈率"), "pb": _num(kv, "市净率"),
         "mcap": _num(kv, "总市值"),
