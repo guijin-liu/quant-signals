@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-07 16:36",
+  "generated": "2026-08-07 17:29",
   "strategy": "2号: 动态池(成交额top150×5日) + 全量指标 + 主力资金流",
   "win_def": "买入后8根15分钟K线内最高涨幅≥1%为胜",
   "hold_bars": 8,
@@ -9,74 +9,144 @@
   "rules": [
     {
       "conditions": [
-        "rsi_lt30",
+        "bb_midlow",
         "obv_up",
-        "j_lt30"
+        "rsi_30_45",
+        "bias_pos"
       ],
-      "n": 54,
-      "wr": 98.1,
-      "avg_gain": 5.82,
+      "n": 38,
+      "wr": 100.0,
+      "avg_gain": 5.92,
       "fund_split": {
         "inflow": {
           "n": 0,
           "wr": null
         },
         "outflow": {
-          "n": 54,
-          "wr": 98.1
+          "n": 38,
+          "wr": 100.0
         }
       },
       "fund_required": false,
-      "sell_pct": 5.2,
+      "sell_pct": 5.3,
       "id": "R001"
+    },
+    {
+      "conditions": [
+        "rsi_lt30",
+        "vol_up",
+        "bias_pos",
+        "consec_up2"
+      ],
+      "n": 39,
+      "wr": 100.0,
+      "avg_gain": 10.37,
+      "fund_split": {
+        "inflow": {
+          "n": 0,
+          "wr": null
+        },
+        "outflow": {
+          "n": 39,
+          "wr": 100.0
+        }
+      },
+      "fund_required": false,
+      "sell_pct": 9.3,
+      "id": "R002"
+    },
+    {
+      "conditions": [
+        "rsi_lt30",
+        "obv_up"
+      ],
+      "n": 66,
+      "wr": 98.5,
+      "avg_gain": 8.26,
+      "fund_split": {
+        "inflow": {
+          "n": 0,
+          "wr": null
+        },
+        "outflow": {
+          "n": 66,
+          "wr": 98.5
+        }
+      },
+      "fund_required": false,
+      "sell_pct": 7.4,
+      "id": "R003"
     },
     {
       "conditions": [
         "bb_midlow",
         "macd_golden",
-        "adx_gt25",
         "pos_lt40"
       ],
-      "n": 57,
-      "wr": 96.5,
-      "avg_gain": 7.25,
+      "n": 55,
+      "wr": 98.2,
+      "avg_gain": 7.52,
       "fund_split": {
         "inflow": {
           "n": 0,
           "wr": null
         },
         "outflow": {
-          "n": 57,
-          "wr": 96.5
+          "n": 55,
+          "wr": 98.2
         }
       },
       "fund_required": false,
-      "sell_pct": 6.5,
-      "id": "R002"
+      "sell_pct": 6.8,
+      "id": "R004"
     },
     {
       "conditions": [
         "pos_lt40",
         "macd_golden",
         "adx_gt25",
-        "rsi_30_45"
+        "obv_up"
       ],
-      "n": 45,
-      "wr": 95.6,
-      "avg_gain": NaN,
+      "n": 31,
+      "wr": 96.8,
+      "avg_gain": 6.2,
       "fund_split": {
         "inflow": {
           "n": 0,
           "wr": null
         },
         "outflow": {
-          "n": 45,
-          "wr": 95.6
+          "n": 31,
+          "wr": 96.8
         }
       },
       "fund_required": false,
-      "sell_pct": 1.0,
-      "id": "R003"
+      "sell_pct": 5.6,
+      "id": "R005"
+    },
+    {
+      "conditions": [
+        "pos_lt40",
+        "golden",
+        "bias_pos",
+        "obv_up"
+      ],
+      "n": 37,
+      "wr": 94.6,
+      "avg_gain": 6.23,
+      "fund_split": {
+        "inflow": {
+          "n": 0,
+          "wr": null
+        },
+        "outflow": {
+          "n": 37,
+          "wr": 94.6
+        }
+      },
+      "fund_required": false,
+      "sell_pct": 5.6,
+      "id": "R006"
     },
     {
       "conditions": [
@@ -85,70 +155,22 @@
         "j_lt30",
         "rsi_30_45"
       ],
-      "n": 34,
-      "wr": 94.1,
-      "avg_gain": 5.38,
+      "n": 33,
+      "wr": 93.9,
+      "avg_gain": 5.39,
       "fund_split": {
         "inflow": {
           "n": 0,
           "wr": null
         },
         "outflow": {
-          "n": 34,
-          "wr": 94.1
-        }
-      },
-      "fund_required": false,
-      "sell_pct": 4.8,
-      "id": "R004"
-    },
-    {
-      "conditions": [
-        "bb_midlow",
-        "obv_up",
-        "rsi_30_45",
-        "psy_gt50"
-      ],
-      "n": 47,
-      "wr": 91.5,
-      "avg_gain": 5.45,
-      "fund_split": {
-        "inflow": {
-          "n": 0,
-          "wr": null
-        },
-        "outflow": {
-          "n": 47,
-          "wr": 91.5
+          "n": 33,
+          "wr": 93.9
         }
       },
       "fund_required": false,
       "sell_pct": 4.9,
-      "id": "R005"
-    },
-    {
-      "conditions": [
-        "pos_lt40",
-        "golden",
-        "bb_midlow",
-        "bias_pos"
-      ],
-      "n": 69,
-      "wr": 91.3,
-      "avg_gain": 7.66,
-      "fund_split": {
-        "inflow": {
-          "n": 0,
-          "wr": null
-        },
-        "outflow": {
-          "n": 69,
-          "wr": 91.3
-        }
-      },
-      "fund_required": false,
-      "sell_pct": 6.9,
-      "id": "R006"
+      "id": "R007"
     },
     {
       "conditions": [
@@ -157,8 +179,8 @@
         "pos_lt40",
         "bb_midlow"
       ],
-      "n": 235,
-      "wr": 89.8,
+      "n": 202,
+      "wr": 92.1,
       "avg_gain": NaN,
       "fund_split": {
         "inflow": {
@@ -166,13 +188,13 @@
           "wr": null
         },
         "outflow": {
-          "n": 235,
-          "wr": 89.8
+          "n": 202,
+          "wr": 92.1
         }
       },
       "fund_required": false,
       "sell_pct": 1.0,
-      "id": "R007"
+      "id": "R008"
     }
   ]
 }
