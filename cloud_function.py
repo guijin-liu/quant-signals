@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 
 import mx_fetcher
 from stock_pool import STOCK_POOL, STOCK_PARAMS, DEFAULT_SELL_PCT
+from fund_eval import fund_eval
 
 BEIJING_TZ = timezone(timedelta(hours=8))
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -242,6 +243,7 @@ def scan_once(all_stocks):
 def push_signal(r, scan_time):
     """推送单个信号"""
     code = r['code']; name = r['name']
+    eval_txt = fund_eval(code, name)   # 主力资金+龙虎榜机构评估
     close = r['close']; change_pct = r['change_pct']
     pe = r['pe']; pb = r['pb']; mcap = r['mcap']
     vol_ratio = r['vol_ratio']; amt_str = r['amt_str']
@@ -270,6 +272,7 @@ def push_signal(r, scan_time):
                  f'<td>KDJ</td><td>K:{r["k"]:.0f} D:{r["d"]:.0f} J:{r["j"]:.0f}</td></tr>'
                  f'<tr><td>信号</td><td style="color:#f39c12">{r["reason"]}</td>'
                  f'<td>妙想</td><td style="color:#27ae60">{fin_label}</td></tr>'
+                 f'<tr><td colspan="4" style="color:#8e44ad">💰 {eval_txt}</td></tr>'
                  f'</table>'
                  f'<p style="color:#888;font-size:12px">⚠️ T+1：今日买入，最快明日才能卖</p>'
                  f'<p style="color:#888;font-size:11px">{scan_time} | {APP_NAME} v16.1 数据驱动 | 腾讯K线+妙想财务</p></div>')
@@ -287,6 +290,7 @@ def push_signal(r, scan_time):
                  f'<tr><td>成交额</td><td>{amt_str}</td><td>排名</td><td>#{vol_rank}</td></tr>'
                  f'<tr><td>PE</td><td>{pe:.1f}</td><td>PB</td><td>{pb:.2f}</td></tr>'
                  f'<tr><td>理由</td><td style="color:#f39c12">{r["reason"]}</td></tr>'
+                 f'<tr><td colspan="2" style="color:#8e44ad">💰 {eval_txt}</td></tr>'
                  f'</table>'
                  f'<p style="color:#888;font-size:11px">{scan_time} | {APP_NAME} v16.1 数据驱动</p></div>')
 

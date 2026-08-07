@@ -12,6 +12,7 @@ import em_client
 import mx_fetcher
 from dynamic_pool import load_pool_window
 from backtest_miner2 import compute_feature_matrix, CONDITIONS
+from fund_eval import fund_eval
 
 APP_NAME = "刘圭金2号量化程序"
 PUSHPLUS_TOKEN = "f3fb5c092ba34785b6857bb45d23d4fa"
@@ -142,6 +143,7 @@ def scan_once(all_stocks, rules):
 def push_signal(r, scan_time):
     code, name = r["code"], r["name"]
     rule = r["rule"]
+    eval_txt = fund_eval(code, name)   # 主力资金+龙虎榜机构评估
     sell = round(r["close"] * (1 + r["sell_pct"] / 100), 2)
     conds_txt = "+".join(rule.get("conditions", []))
     main_str = f"主力净流入 {r['main_net']/1e4:.0f}万" if r["main_net"] else "主力资金-"
@@ -155,6 +157,7 @@ def push_signal(r, scan_time):
                f'<tr><td>胜率</td><td>{rule.get("wr", "-")}% (n={rule.get("n", "-")})</td>'
                f'<td>{main_str}</td></tr>'
                f'<tr><td>RSI</td><td>{r["rsi"]}</td><td>BB%</td><td>{r["bb"]}</td></tr>'
+               f'<tr><td colspan="4" style="color:#8e44ad">💰 {eval_txt}</td></tr>'
                f'</table>'
                f'<p style="color:#888;font-size:11px">{scan_time} | {APP_NAME} | 动态池+85%规则+资金流</p></div>')
     push_msg(title, content)
