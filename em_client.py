@@ -19,7 +19,7 @@ try:
     from requests.adapters import HTTPAdapter
     from urllib3.util.retry import Retry
     _adapter = HTTPAdapter(max_retries=Retry(
-        total=3, connect=3, backoff_factor=0.6,
+        total=2, connect=1, backoff_factor=0.5,
         status_forcelist=[429, 500, 502, 503, 504], allowed_methods=["GET"]))
     EM_SESSION.mount("https://", _adapter)
     EM_SESSION.mount("http://", _adapter)

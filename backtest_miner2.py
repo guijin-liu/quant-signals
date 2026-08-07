@@ -253,7 +253,9 @@ def backtest_stock2(code, hold_bars=8, win_pct=1.0, start="20260101"):
     df = em_client.em_fetch_kline_15m(code, start)
     if df.empty or len(df) < 100:
         return None
-    fund = em_client.em_fund_flow_120d(code)
+    # 东财K线被拒(腾讯兜底≤120根)时跳过资金流，避免东财重试浪费；东财通(≥300根)才拉资金流
+    em_ok = len(df) > 300
+    fund = em_client.em_fund_flow_120d(code) if em_ok else []
     fund_by_date = {r["date"]: r for r in fund}
 
     f = compute_feature_matrix(df["close"].values, df["high"].values,
