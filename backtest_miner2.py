@@ -429,11 +429,12 @@ def mine(stocks, hold_bars=8, win_pct=1.0, wr_target=85, min_n=30, start="202601
     # 去重 + 排序
     seen2 = set()
     final = []
-    for r in sorted(rules, key=lambda x: -x["wr"]):
+    for idx, r in enumerate(sorted(rules, key=lambda x: -x["wr"])):
         k = tuple(sorted(r["conditions"]))
         if k in seen2:
             continue
         seen2.add(k)
+        r["id"] = f"R{idx+1:03d}"
         final.append(r)
 
     return {"single": single, "rules": final[:20]}
