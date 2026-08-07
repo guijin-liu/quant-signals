@@ -9,7 +9,8 @@ __pycache__/
 quant.log
 live_watcher.log
 live_watcher_err.log
-data/
+data/*
+!data/top_amount/
 backtest/
 features/
 lib/

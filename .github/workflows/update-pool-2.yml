@@ -1,0 +1,37 @@
+name: 更新2号动态池
+
+on:
+  schedule:
+    # 北京时间 15:40（UTC 7:40），收盘后更新当日成交额top150
+    - cron: '40 7 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  update-pool:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install requests pandas numpy
+
+      - name: 拉取成交额top150
+        run: python dynamic_pool.py --save-today
+
+      - name: commit回仓库
+        run: |
+          git config user.name "quant-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add data/top_amount/
+          if ! git diff --cached --quiet; then
+            git commit -m "update 2号动态池 $(TZ='Asia/Shanghai' date +%Y%m%d)"
+            git push origin HEAD:master
+          else
+            echo "无新榜单"
+          fi
