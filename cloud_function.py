@@ -132,49 +132,17 @@ def batch_pre_screen(stocks: dict) -> list:
 # ═══════════════════════════════════════
 
 def compute_features(df):
-    close = df['close'].values; high = df['high'].values
-    low = df['low'].values; vol = df['volume'].values
-    n = len(close)
-    if n < 26: return None
-    f = {}
-    f['close'] = close[-1]
-    f['ma5']  = np.mean(close[-5:])
-    f['ma10'] = np.mean(close[-10:])
-    f['ma20'] = np.mean(close[-20:])
-    f['ma60'] = np.mean(close[-min(60,n):])
-    p_ma5 = np.mean(close[-6:-1]); p_ma10 = np.mean(close[-11:-1])
-    f['golden'] = (f['ma5'] > f['ma10']) and (p_ma5 <= p_ma10)
-    f['dead']   = (f['ma5'] < f['ma10']) and (p_ma5 >= p_ma10)
-    deltas = np.diff(close[-15:])
-    g = np.mean(deltas[deltas > 0]) if np.any(deltas > 0) else 0
-    l = -np.mean(deltas[deltas < 0]) if np.any(deltas < 0) else 1e-9
-    f['rsi'] = 100 - 100/(1+g/l) if l > 0 else 50
-    bb_m = np.mean(close[-20:]); bb_s = np.std(close[-20:])
-    bb_u = bb_m + 2*bb_s; bb_l = bb_m - 2*bb_s
-    f['bb_pct'] = max(0.0, min(1.0, (close[-1] - bb_l) / (bb_u - bb_l + 0.0001)))
-    f['bb_width'] = (bb_u - bb_l) / bb_m
-    h20 = np.max(high[-20:]); l20 = np.min(low[-20:])
-    f['pos'] = max(0.0, min(1.0, (close[-1] - l20) / (h20 - l20 + 0.0001)))
-    f['vol_ratio'] = np.mean(vol[-5:]) / (np.mean(vol[-20:]) + 1)
-    f['vol_trend'] = np.mean(vol[-10:]) / (np.mean(vol[-30:]) + 1) if n >= 30 else 1.0
-    ema12 = pd.Series(close).ewm(span=12, adjust=False).mean().values
-    ema26 = pd.Series(close).ewm(span=26, adjust=False).mean().values
-    dif = ema12 - ema26; dea = pd.Series(dif).ewm(span=9, adjust=False).mean().values
-    f['macd'] = 2 * (dif[-1] - dea[-1])
-    f['macd_direction'] = 'up' if f['macd'] > 2*(dif[-2]-dea[-2]) else 'down'
-    h9 = np.max(high[-9:]); l9 = np.min(low[-9:])
-    rsv = (close[-1] - l9) / (h9 - l9 + 0.0001) * 100
-    f['k'] = 2/3 * 50 + 1/3 * rsv
-    f['d'] = 2/3 * 50 + 1/3 * f['k']; f['j'] = 3 * f['k'] - 2 * f['d']
-    trs = []
-    for i in range(-14, 0):
-        h, lv, pc = high[i], low[i], close[i-1] if i > -14 else close[i-1]
-        trs.append(max(h-lv, abs(h-pc), abs(lv-pc)))
-    f['atr'] = np.mean(trs)
-    obv_changes = [vol[i] if close[i] > close[i-1] else (-vol[i] if close[i] < close[i-1] else 0) for i in range(-10, 0)]
-    f['obv_up'] = sum(obv_changes) > 0
-    f['above_ma20'] = close[-1] > f['ma20']
-    f['above_ma60'] = close[-1] > f['ma60']
+    """全量技术指标（复用2号引擎47列：MA/RSI/MACD/KDJ/BOLL/CCI/WR/BIAS/DMI/ROC/PSY/OBV/资金流…）"""
+    if df.empty or len(df) < 70:
+        return None
+    from backtest_miner2 import compute_feature_matrix
+    fm = compute_feature_matrix(df['close'].values, df['high'].values,
+                                df['low'].values, df['volume'].values)
+    if fm.empty:
+        return None
+    f = fm.iloc[-1].to_dict()
+    f['macd'] = float(f.get('macd_hist', 0))          # 兼容1号字段名
+    f['macd_direction'] = 'up' if f['macd'] > 0 else 'down'
     return f
 
 
