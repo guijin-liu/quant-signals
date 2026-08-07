@@ -55,32 +55,40 @@ FS_ALL_A = "m:0+t:6,m:0+t:80,m:0+t:81,m:1+t:2,m:1+t:23,m:1+t:3,f:8"  # 全A主�
 
 
 def em_fetch_top_amount(n=150) -> list:
-    """全A非ST 按成交额(f5)降序取前n名。
-    返回 [{code,name,amount,volume,price,chg,turnover,pe,mcap}, ...]"""
-    params = {
-        "pn": "1", "pz": str(n), "po": "1", "np": "1",
-        "fltt": "2", "invt": "2", "dect": "1",
-        "fid": "f5", "fs": FS_ALL_A,
-        "fields": "f2,f3,f5,f6,f8,f9,f12,f14,f20,f21",
-        "_": str(int(time.time() * 1000)),
-    }
-    headers = {"User-Agent": UA, "Referer": "https://quote.eastmoney.com/"}
-    try:
-        r = em_get(TOP_URL, params=params, headers=headers, timeout=15)
-        diff = (r.json().get("data") or {}).get("diff") or []
-        rows = []
+    """全A非ST 按成交额(f6)降序取前n名（实测 f5=成交量手, f6=成交额元）。
+    东财单页 pz 上限 100，分页拉满。返回 [{code,name,amount,volume,price,chg,turnover,pe,mcap}, ...]"""
+    all_rows = []
+    pn = 1
+    while len(all_rows) < n:
+        page = min(100, n - len(all_rows))
+        params = {
+            "pn": str(pn), "pz": str(page), "po": "1", "np": "1",
+            "fltt": "2", "invt": "2", "dect": "1",
+            "fid": "f6", "fs": FS_ALL_A,
+            "fields": "f2,f3,f5,f6,f8,f9,f12,f14,f20,f21",
+            "_": str(int(time.time() * 1000)),
+        }
+        headers = {"User-Agent": UA, "Referer": "https://quote.eastmoney.com/"}
+        try:
+            r = em_get(TOP_URL, params=params, headers=headers, timeout=15)
+            diff = (r.json().get("data") or {}).get("diff") or []
+        except Exception as e:
+            logger.error(f"top_amount p{pn}: {e}")
+            break
+        if not diff:
+            break
         for it in diff:
-            rows.append({
+            all_rows.append({
                 "code": it.get("f12", ""), "name": it.get("f14", ""),
-                "amount": it.get("f5", 0), "volume": it.get("f6", 0),
+                "amount": it.get("f6", 0), "volume": it.get("f5", 0),
                 "price": it.get("f2", 0), "chg": it.get("f3", 0),
                 "turnover": it.get("f8", 0), "pe": it.get("f9", 0),
                 "mcap": it.get("f20", 0),
             })
-        return rows
-    except Exception as e:
-        logger.error(f"top_amount: {e}")
-        return []
+        if len(diff) < page:
+            break
+        pn += 1
+    return all_rows[:n]
 
 
 # ═══════════════════════════════════════════════
