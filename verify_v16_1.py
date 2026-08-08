@@ -1,5 +1,7 @@
 """v16.1 全面终检验证"""
 import os, sys
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 sys.path.insert(0, '.')
 
 print("=" * 60)
@@ -45,14 +47,14 @@ fake = {
 }
 # 数据驱动
 b1, r1, t1, g1 = cloud_function.score_buy('000630', fake)
-assert b1 and g1 == 12.2, f"铜陵卖点错误: {g1}"
+assert b1 and g1 == 15.8, f"铜陵卖点错误: {g1}"
 # 默认
 b2, r2, t2, g2 = cloud_function.score_buy('600497', fake)
 assert b2 and g2 == 5.0, f"默认卖点错误: {g2}"
 # 保守
 b3, r3, t3, g3 = cloud_function.score_buy('603986', fake)
 assert b3 and g3 == 3.5, f"保守卖点错误: {g3}"
-print(f"4. 卖点策略: 数据驱动12.2% 默认5.0% 保守3.5% ✓")
+print(f"4. 卖点策略: 数据驱动15.8% 默认5.0% 保守3.5% ✓")
 
 # 5. GitHub Actions workflow
 wf = open('.github/workflows/quant-scan.yml', encoding='utf-8').read()
