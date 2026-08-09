@@ -120,8 +120,7 @@ def scan_once(all_stocks, rules):
                 # 资金流确认（仅午盘后启用，避免半天数据误判）
                 main_net = 0
                 if bj_now().hour >= 13:
-                    import mx_fetcher  # 妙想个人API（东财分钟级被拒时兜底，日级主力净流入）
-                    fund = mx_fetcher.mx_fund_flow(code, name)
+                    fund = mx_fetcher.mx_fund_flow(code, name)  # 妙想个人API（东财分钟级被拒时兜底，日级主力净流入）
                     main_net = fund[0]["main_net"] if fund else 0  # 妙想降序(最新在前)，[0]=最新交易日
                 if rule.get("fund_required") and main_net <= 0:
                     logger.info(f"{code}{name} 命中规则但主力净流出({main_net/1e4:.0f}万)，拦截")
