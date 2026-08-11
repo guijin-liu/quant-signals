@@ -151,7 +151,7 @@ def compute_features(df):
 # 买卖点评分
 # ═══════════════════════════════════════
 
-def score_buy(code, f15, f5=None):
+def score_buy(code, f15, f5=None, fund=None):
     if not f15: return False, "", 0, 0
     close = f15['close']; score = 0; reasons = []
     if f15['golden']: score += 2; reasons.append("金叉")
@@ -166,6 +166,19 @@ def score_buy(code, f15, f5=None):
     if f15['obv_up']: score += 1; reasons.append("OBV向上")
     if f15['above_ma60']: score += 1; reasons.append("多头趋势")
     if f5 and f5.get('golden'): score += 1; reasons.append("5min确认")
+
+    # v16.1 资金流考量（重要指标）：主力净流入为正是加分项
+    # 研究结论: 主力流入时胜率全面高3~8pp，超大单最强（2号已用资金拦截）
+    if fund:
+        try:
+            main5 = sum(x["main_net"] for x in fund[:5]) / 1e8
+            if main5 > 0:
+                score += 1; reasons.append("主力净流入")
+            elif main5 < -1:
+                reasons.append("主力流出⚠")
+        except Exception:
+            pass
+
     if close > f15['ma20'] * 1.05: return False, "追高(>MA20+5%)", 0, 0
     if score < 3: return False, f"共振不足({score}分)", 0, 0
 
@@ -194,11 +207,33 @@ def score_sell(f15, predicted_gain_pct):
 # 单次扫描（原有逻辑，不做推送）
 # ═══════════════════════════════════════
 
+# 资金流日级缓存（一天内复用，避免每轮59次API重复调用）
+_FUND_CACHE = {"date": "", "data": None}
+
+def _get_funds(all_stocks):
+    """主力资金流字典 {code: rows}，按天缓存；异常返回空"""
+    today = bj_now().strftime("%Y%m%d")
+    if _FUND_CACHE["date"] == today and _FUND_CACHE["data"] is not None:
+        return _FUND_CACHE["data"]
+    funds = {}
+    for code, name in all_stocks.items():
+        try:
+            rows = mx_fetcher.mx_fund_flow(code, name)
+            funds[code] = rows if rows else []
+        except Exception:
+            funds[code] = []
+        time.sleep(0.1)
+    _FUND_CACHE["date"] = today
+    _FUND_CACHE["data"] = funds
+    return funds
+
+
 def scan_once(all_stocks):
     """执行一次扫描，返回信号列表"""
     candidates = batch_pre_screen(all_stocks)
     if not candidates:
         return []
+    funds = _get_funds(all_stocks)
 
     results = []
     for idx, c in enumerate(candidates):
@@ -215,7 +250,7 @@ def scan_once(all_stocks):
         df5 = mx_fetcher.fetch_kline(code, '5')
         f5 = compute_features(df5) if (not df5.empty and len(df5) >= 26) else None
 
-        buy, reason_b, target, gain_pct = score_buy(code, f15, f5)
+        buy, reason_b, target, gain_pct = score_buy(code, f15, f5, funds.get(code))
         sell, reason_s = score_sell(f15, gain_pct)
         sig = "BUY" if buy else ("SELL" if sell else "HOLD")
         reason = reason_b if buy else (reason_s if sell else "")
