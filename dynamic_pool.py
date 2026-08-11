@@ -13,21 +13,11 @@ POOL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "top
 DAYS = 5  # 滚动窗口天数
 
 
-def is_stock(code):
-    """过滤ETF/LOF/债券/REITs，只留A股个股（沪60/68、深00/30）"""
-    c = str(code)
-    return c.startswith(("60", "68", "00", "30"))
-
-
 def save_today(n=150, date=None):
     """拉当日成交额前n，存 data/top_amount/{date}.json。返回路径或None"""
     rows = em_client.em_fetch_top_amount(n)
     if not rows:
         logger.error("top150 拉取失败(空)，未保存")
-        return None
-    rows = [s for s in rows if s.get("code") and is_stock(s["code"])]
-    if not rows:
-        logger.error("top150 全为非股票，未保存")
         return None
     date = date or datetime.datetime.now().strftime("%Y%m%d")
     os.makedirs(POOL_DIR, exist_ok=True)
@@ -49,7 +39,7 @@ def load_pool_window(days=DAYS, as_of=None):
             with open(path, encoding="utf-8") as f:
                 data = json.load(f)
             for s in data.get("stocks", []):
-                if s.get("code") and is_stock(s["code"]):
+                if s.get("code"):
                     pool[s["code"]] = s.get("name", s["code"])
         except Exception as e:
             logger.warning(f"读榜失败 {path}: {e}")
