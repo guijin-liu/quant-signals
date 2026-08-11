@@ -93,6 +93,49 @@ def em_fetch_top_amount(n=150) -> list:
         if new == 0:  # 本页全重复（分页未生效）→ 停止避免死循环
             break
         pn += 1
+    if not all_rows:
+        logger.warning("东财 top_amount 全失败，降级新浪排行兜底")
+        return em_fetch_top_amount_sina(n)
+    return all_rows[:n]
+
+
+def em_fetch_top_amount_sina(n=150) -> list:
+    """新浪成交额排行兜底（东财 clist 502/风控时降级）。
+    Market_Center.getHQNodeData: sort=amount 按成交额降序，每页100，取前n。
+    返回结构与 em_fetch_top_amount 一致 [{code,name,amount,volume,price,chg,turnover,pe,mcap}]"""
+    url = "https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData"
+    all_rows, seen = [], set()
+    page = 1
+    while len(all_rows) < n and page <= 3:
+        params = {"page": str(page), "num": "100", "sort": "amount", "asc": "0", "node": "hs_a"}
+        try:
+            r = requests.get(url, params=params, timeout=12,
+                             headers={"User-Agent": UA, "Referer": "https://finance.sina.com.cn/"})
+            diff = r.json()
+        except Exception as e:
+            logger.error(f"top_amount_sina p{page}: {e}")
+            break
+        if not diff:
+            break
+        new = 0
+        for it in diff:
+            sym = str(it.get("symbol", ""))
+            code = sym[-6:] if sym else ""
+            if not code or code in seen:
+                continue
+            seen.add(code)
+            all_rows.append({
+                "code": code, "name": it.get("name", ""),
+                "amount": it.get("amount", 0), "volume": it.get("volume", 0),
+                "price": it.get("trade", 0), "chg": it.get("changepercent", 0),
+                "turnover": it.get("turnoverratio", 0), "pe": it.get("per", 0),
+                "mcap": it.get("mktcap", 0),
+            })
+            new += 1
+        if new == 0:
+            break
+        page += 1
+    logger.info(f"新浪排行兜底: {len(all_rows)}只")
     return all_rows[:n]
 
 
