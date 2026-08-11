@@ -351,8 +351,12 @@ def main_loop():
     scan_count = 0
     last_state = None
 
-    # 最长运行到 15:30（GitHub 6小时足够）
-    deadline = bj_now().replace(hour=15, minute=30, second=0, microsecond=0)
+    # 截止时间可配置（多段运行跳过午休：上午段 SCAN_DEADLINE=11:30，下午段默认15:30）
+    eh, em = 15, 30
+    env_deadline = os.environ.get("SCAN_DEADLINE", "")
+    if env_deadline and ":" in env_deadline:
+        eh, em = map(int, env_deadline.split(":")[:2])
+    deadline = bj_now().replace(hour=eh, minute=em, second=0, microsecond=0)
 
     while bj_now() < deadline:
         state = market_state()

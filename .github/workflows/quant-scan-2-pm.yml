@@ -1,15 +1,16 @@
-name: 量化买卖点扫描2号
+name: 量化买卖点扫描2号·下午
 
 on:
   schedule:
-    # 北京时间 6:00 触发（UTC 前夜22:00），对冲GitHub cron延迟，内循环到15:30
-    - cron: '0 22 * * 0-4'
+    # 北京时间 13:00 触发（UTC 5:00），下午段跑到 15:01 收盘（market_state 自动 closed 退出）
+    - cron: '0 5 * * 0-4'
   workflow_dispatch:
 
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 600
+    timeout-minutes: 180
+
     steps:
       - uses: actions/checkout@v4
 
@@ -23,9 +24,10 @@ jobs:
       - name: 同步最新动态池
         run: git pull --rebase origin master || true
 
-      - name: 2号扫描（长运行模式）
+      - name: 2号下午盘扫描（13:00→15:01）
         env:
           MX_APIKEY: ${{ secrets.MX_APIKEY }}
+          SCAN_DEADLINE: "15:30"
         run: python cloud2_function.py
 
       - name: 故障告警
@@ -33,4 +35,4 @@ jobs:
         run: |
           curl -s -X POST http://www.pushplus.plus/send \
             -H "Content-Type: application/json" \
-            -d '{"token":"f3fb5c092ba34785b6857bb45d23d4fa","title":"🚨 刘圭金2号扫描故障","content":"<div style=\"color:#e74c3c;padding:15px\"><h2>GitHub Actions 2号扫描失败</h2><p>时间: '"$(TZ='Asia/Shanghai' date +'%m/%d %H:%M')"'</p></div>","template":"html"}'
+            -d '{"token":"f3fb5c092ba34785b6857bb45d23d4fa","title":"🚨 刘圭金2号扫描故障(下午)","content":"<div style=\"color:#e74c3c;padding:15px\"><h2>GitHub Actions 2号下午扫描失败</h2><p>时间: '"$(TZ='Asia/Shanghai' date +'%m/%d %H:%M')"'</p></div>","template":"html"}'

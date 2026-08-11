@@ -49,47 +49,15 @@ def fetch_daily_tencent(code):
 # ═══════════════════════════════════════
 
 def compute_features(close, high, low, vol):
+    """全量技术指标（复用2号引擎47列，与cloud_function.py实盘100%一致）"""
+    from backtest_miner2 import compute_feature_matrix
     n = len(close)
-    if n < 60: return None
-    f = {}
-    f['close'] = close[-1]
-    f['ma5']  = np.mean(close[-5:])
-    f['ma10'] = np.mean(close[-10:])
-    f['ma20'] = np.mean(close[-20:])
-    f['ma60'] = np.mean(close[-min(60,n):])
-    p_ma5 = np.mean(close[-6:-1]); p_ma10 = np.mean(close[-11:-1])
-    f['golden'] = (f['ma5'] > f['ma10']) and (p_ma5 <= p_ma10)
-    f['dead']   = (f['ma5'] < f['ma10']) and (p_ma5 >= p_ma10)
-    deltas = np.diff(close[-15:])
-    g = np.mean(deltas[deltas > 0]) if np.any(deltas > 0) else 0
-    l = -np.mean(deltas[deltas < 0]) if np.any(deltas < 0) else 1e-9
-    f['rsi'] = 100 - 100/(1+g/l) if l > 0 else 50
-    bb_m = np.mean(close[-20:]); bb_s = np.std(close[-20:])
-    bb_u = bb_m + 2*bb_s; bb_l = bb_m - 2*bb_s
-    f['bb_pct'] = max(0.0, min(1.0, (close[-1] - bb_l) / (bb_u - bb_l + 0.0001)))
-    f['bb_width'] = (bb_u - bb_l) / bb_m
-    h20 = np.max(high[-20:]); l20 = np.min(low[-20:])
-    f['pos'] = max(0.0, min(1.0, (close[-1] - l20) / (h20 - l20 + 0.0001)))
-    f['vol_ratio'] = np.mean(vol[-5:]) / (np.mean(vol[-20:]) + 1)
-    f['vol_trend'] = np.mean(vol[-10:]) / (np.mean(vol[-30:]) + 1) if n >= 30 else 1.0
-    ema12 = pd.Series(close).ewm(span=12, adjust=False).mean().values
-    ema26 = pd.Series(close).ewm(span=26, adjust=False).mean().values
-    dif = ema12 - ema26; dea = pd.Series(dif).ewm(span=9, adjust=False).mean().values
-    f['macd'] = 2*(dif[-1] - dea[-1])
-    f['macd_up'] = dif[-1] > dea[-1]
-    h9 = np.max(high[-9:]); l9 = np.min(low[-9:])
-    rsv = (close[-1] - l9) / (h9 - l9 + 0.0001) * 100
-    f['k'] = 2/3*50 + 1/3*rsv
-    f['d'] = 2/3*50 + 1/3*f['k']; f['j'] = 3*f['k'] - 2*f['d']
-    trs = []
-    for i in range(-14, 0):
-        h, lv, pc = high[i], low[i], close[i-1]
-        trs.append(max(h-lv, abs(h-pc), abs(lv-pc)))
-    f['atr'] = np.mean(trs)
-    obv_changes = [vol[i] if close[i] > close[i-1] else (-vol[i] if close[i] < close[i-1] else 0) for i in range(-10, 0)]
-    f['obv_up'] = sum(obv_changes) > 0
-    f['above_ma20'] = close[-1] > f['ma20']
-    f['above_ma60'] = close[-1] > f['ma60']
+    if n < 70: return None
+    fm = compute_feature_matrix(close, high, low, vol)
+    if fm.empty: return None
+    f = fm.iloc[-1].to_dict()
+    f['macd'] = float(f.get('macd_hist', 0))          # 兼容1号字段名
+    f['macd_direction'] = 'up' if f['macd'] > 0 else 'down'
     return f
 
 # ═══════════════════════════════════════
@@ -137,19 +105,20 @@ def backtest_stock(code, name):
     close = df['close'].values; high = df['high'].values
     low = df['low'].values; vol = df['volume'].values
 
-    # 按评分分组收集信号
-    score_signals = defaultdict(list)
+    # 收集所有 ≥3分信号（与实盘 score_buy 一致：≥3分触发，≥4分=强，不区分具体分数）
+    all_signals = []
 
-    for i in range(60, len(df) - 20):
-        f = compute_features(close[i-60:i+1], high[i-60:i+1], low[i-60:i+1], vol[i-60:i+1])
+    for i in range(70, len(df) - 20):
+        f = compute_features(close[i-70:i+1], high[i-70:i+1], low[i-70:i+1], vol[i-70:i+1])
         if not f: continue
         s, reasons = score_v16(f)
         if s < 3: continue  # v16原版阈值
         entry = close[i]
         forward_high = high[i+1:i+21]
         max_gain = (np.max(forward_high) - entry) / entry * 100
-        score_signals[s].append({
+        all_signals.append({
             'date': str(df['date'].iloc[i])[:10],
+            'score': s,
             'reasons': '+'.join(reasons),
             'entry': round(entry, 2),
             'max_gain': round(max_gain, 2),
@@ -159,15 +128,14 @@ def backtest_stock(code, name):
             'win_0pct': max_gain > 0,
         })
 
-    # 按评分统计
+    # 合并统计（n>=5 才纳入）
     results = []
-    for score, trades in sorted(score_signals.items()):
-        n = len(trades)
-        if n < 5: continue
-        wr_1pct = sum(1 for t in trades if t['win_1pct']) / n
-        wr_2pct = sum(1 for t in trades if t['win_2pct']) / n
-        wr_0pct = sum(1 for t in trades if t['win_0pct']) / n
-        gain_list = [t['max_gain'] for t in trades]
+    n = len(all_signals)
+    if n >= 5:
+        wr_1pct = sum(1 for t in all_signals if t['win_1pct']) / n
+        wr_2pct = sum(1 for t in all_signals if t['win_2pct']) / n
+        wr_0pct = sum(1 for t in all_signals if t['win_0pct']) / n
+        gain_list = [t['max_gain'] for t in all_signals]
         p50 = np.percentile(gain_list, 50)
         p60 = np.percentile(gain_list, 60)
         p70 = np.percentile(gain_list, 70)
@@ -175,12 +143,13 @@ def backtest_stock(code, name):
         p90 = np.percentile(gain_list, 90)
 
         # 胜者分布（≥1%）
-        win_gains = [t['max_gain'] for t in trades if t['win_1pct']]
+        win_gains = [t['max_gain'] for t in all_signals if t['win_1pct']]
         win_p70 = np.percentile(win_gains, 70) if win_gains else 0
         win_p80 = np.percentile(win_gains, 80) if win_gains else 0
 
+        avg_score = sum(t['score'] for t in all_signals) / n
         results.append({
-            'score': score,
+            'score': round(avg_score, 1),
             'n': n,
             'wr_1pct': round(wr_1pct*100, 1),
             'wr_2pct': round(wr_2pct*100, 1),
@@ -190,8 +159,8 @@ def backtest_stock(code, name):
             'sell_70': round(p70 * 0.9, 1),
             'sell_80': round(p80 * 0.9, 1),
             'avg_gain': round(np.mean(gain_list), 1),
-            'sample_dates': f"{trades[0]['date']}~{trades[-1]['date']}",
-            'top_reason': max(set(t['reasons'] for t in trades), key=lambda r: sum(1 for t in trades if t['reasons']==r)),
+            'sample_dates': f"{all_signals[0]['date']}~{all_signals[-1]['date']}",
+            'top_reason': max(set(t['reasons'] for t in all_signals), key=lambda r: sum(1 for t in all_signals if t['reasons']==r)),
         })
 
     return results, None
@@ -277,7 +246,7 @@ def main():
     # ═══ 保存策略配置 ═══
     output = {
         'generated': datetime.now().strftime('%Y-%m-%d %H:%M'),
-        'strategy': 'v16 — 7指标共振, ≥3分买入, 金叉必须',
+        'strategy': 'v16.1 — 47列全量指标共振, ≥3分买入, 金叉必须',
         'data_source': '腾讯日线 (web.ifzq.gtimg.cn)',
         'total_stocks': len(POOL),
         'win_threshold': '≥1%涨幅为胜',

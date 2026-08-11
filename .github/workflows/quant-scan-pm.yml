@@ -1,15 +1,15 @@
-name: 量化买卖点扫描
+name: 量化买卖点扫描·下午
 
 on:
   schedule:
-    # 北京时间 6:00 触发（UTC 前夜22:00），提前启动对冲GitHub cron延迟，内循环扫描到15:30
-    - cron: '0 22 * * 0-4'
+    # 北京时间 13:00 触发（UTC 5:00），下午段跑到 15:01 收盘（market_state 自动 closed 退出）
+    - cron: '0 5 * * 0-4'
   workflow_dispatch:
 
 jobs:
   scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 600
+    timeout-minutes: 180
 
     steps:
       - uses: actions/checkout@v4
@@ -28,10 +28,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: 量化扫描（长运行模式）
+      - name: 下午盘扫描（13:00→15:01）
         env:
           DEEPSEEK_KEY: ${{ secrets.DEEPSEEK_KEY }}
           MX_APIKEY: ${{ secrets.MX_APIKEY }}
+          SCAN_DEADLINE: "15:30"
         run: python cloud_function.py
 
       - name: 故障告警
@@ -39,4 +40,4 @@ jobs:
         run: |
           curl -s -X POST http://www.pushplus.plus/send \
             -H "Content-Type: application/json" \
-            -d '{"token":"f3fb5c092ba34785b6857bb45d23d4fa","title":"🚨 量化扫描故障","content":"<div style=\"color:#e74c3c;padding:15px\"><h2>GitHub Actions 扫描失败</h2><p>时间: '"$(TZ='Asia/Shanghai' date +'%m/%d %H:%M')"'</p><p><a href=\"https://github.com/guijin-liu/quant-signals/actions\">查看日志</a></p></div>","template":"html"}'
+            -d '{"token":"f3fb5c092ba34785b6857bb45d23d4fa","title":"🚨 量化扫描故障(下午)","content":"<div style=\"color:#e74c3c;padding:15px\"><h2>GitHub Actions 下午扫描失败</h2><p>时间: '"$(TZ='Asia/Shanghai' date +'%m/%d %H:%M')"'</p><p><a href=\"https://github.com/guijin-liu/quant-signals/actions\">查看日志</a></p></div>","template":"html"}'

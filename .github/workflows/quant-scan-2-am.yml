@@ -1,0 +1,38 @@
+name: 量化买卖点扫描2号·上午
+
+on:
+  schedule:
+    # 北京时间 9:15 触发（UTC 1:15），上午段跑到 11:30 午休止
+    - cron: '15 1 * * 0-4'
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: 同步最新动态池
+        run: git pull --rebase origin master || true
+
+      - name: 2号上午盘扫描（9:15→11:30）
+        env:
+          MX_APIKEY: ${{ secrets.MX_APIKEY }}
+          SCAN_DEADLINE: "11:30"
+        run: python cloud2_function.py
+
+      - name: 故障告警
+        if: failure()
+        run: |
+          curl -s -X POST http://www.pushplus.plus/send \
+            -H "Content-Type: application/json" \
+            -d '{"token":"f3fb5c092ba34785b6857bb45d23d4fa","title":"🚨 刘圭金2号扫描故障(上午)","content":"<div style=\"color:#e74c3c;padding:15px\"><h2>GitHub Actions 2号上午扫描失败</h2><p>时间: '"$(TZ='Asia/Shanghai' date +'%m/%d %H:%M')"'</p></div>","template":"html"}'
