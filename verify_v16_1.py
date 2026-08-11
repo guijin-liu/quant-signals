@@ -12,9 +12,10 @@ print("=" * 60)
 from stock_pool import STOCK_POOL, STOCK_PARAMS, DEFAULT_SELL_PCT
 p = set(STOCK_POOL.keys())
 a = set(STOCK_PARAMS.keys())
-assert len(p) == len(a) == 61, f"池子{len(p)}≠参数{len(a)}"
+assert len(p) == len(a) == 59, f"池子{len(p)}≠参数{len(a)}"
 assert p == a, f"池子参数不匹配"
-print(f"1. stock_pool: {len(p)}只 ✓")
+assert "159941" not in p and "513100" not in p, "纳指未剔除"
+print(f"1. stock_pool: {len(p)}只（已剔除纳指）✓")
 
 # 2. mx_fetcher
 import mx_fetcher
@@ -45,28 +46,30 @@ fake = {
     'vol_ratio': 1.2, 'obv_up': True, 'above_ma60': True,
     'bb_width': 0.05, 'atr': 0.5, 'pos': 0.5, 'dead': False,
 }
-# 数据驱动
+# 数据驱动（47指标回溯卖点）
 b1, r1, t1, g1 = cloud_function.score_buy('000630', fake)
-assert b1 and g1 == 15.8, f"铜陵卖点错误: {g1}"
-# 默认
+assert b1 and g1 == 8.0, f"铜陵卖点错误: {g1}"
 b2, r2, t2, g2 = cloud_function.score_buy('600497', fake)
-assert b2 and g2 == 5.0, f"默认卖点错误: {g2}"
-# 保守
+assert b2 and g2 == 12.9, f"驰宏卖点错误: {g2}"
 b3, r3, t3, g3 = cloud_function.score_buy('603986', fake)
-assert b3 and g3 == 3.5, f"保守卖点错误: {g3}"
-print(f"4. 卖点策略: 数据驱动15.8% 默认5.0% 保守3.5% ✓")
+assert b3 and g3 == 15.7, f"兆易卖点错误: {g3}"
+# 纳指已剔除，不应有参数
+assert "159941" not in STOCK_PARAMS and "513100" not in STOCK_PARAMS, "纳指还在参数里"
+print(f"4. 卖点策略: 数据驱动 铜陵8.0% 驰宏12.9% 兆易15.7% ✓")
 
-# 5. GitHub Actions workflow
-wf = open('.github/workflows/quant-scan.yml', encoding='utf-8').read()
-assert 'MX_APIKEY' in wf, "workflow缺MX_APIKEY"
-assert 'cloud_function.py' in wf
-print("5. GitHub Actions: MX_APIKEY已添加 ✓")
+# 5. GitHub Actions workflow（拆分上午/下午两段）
+for wf_name in ('quant-scan-am.yml', 'quant-scan-pm.yml'):
+    wf = open(f'.github/workflows/{wf_name}', encoding='utf-8').read()
+    assert 'MX_APIKEY' in wf, f"{wf_name}缺MX_APIKEY"
+    assert 'cloud_function.py' in wf
+assert 'SCAN_DEADLINE' in open('.github/workflows/quant-scan-am.yml', encoding='utf-8').read()
+print("5. GitHub Actions: 上午/下午两段 + SCAN_DEADLINE ✓")
 
 # 6. live_watcher
 import live_watcher
 assert hasattr(live_watcher, 'STOCKS')
-assert len(live_watcher.STOCKS) == 61, f"live_watcher池子: {len(live_watcher.STOCKS)}"
-print("6. live_watcher: 61只池 ✓")
+assert len(live_watcher.STOCKS) == 59, f"live_watcher池子: {len(live_watcher.STOCKS)}"
+print("6. live_watcher: 59只池 ✓")
 
 # 7. backtest_miner
 import backtest_miner
