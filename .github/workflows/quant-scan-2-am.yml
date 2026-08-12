@@ -2,8 +2,8 @@ name: 量化买卖点扫描2号·上午
 
 on:
   schedule:
-    # 北京时间 9:15 触发（UTC 1:15），上午段跑到 11:30 午休止
-    - cron: '15 1 * * 0-4'
+    # 北京时间 8:45 触发（UTC 0:45），上午段跑到 11:30 午休止
+    - cron: '45 0 * * 0-4'
   workflow_dispatch:
 
 jobs:
@@ -24,7 +24,7 @@ jobs:
       - name: 同步最新动态池
         run: git pull --rebase origin master || true
 
-      - name: 2号上午盘扫描（9:15→11:30）
+      - name: 2号上午盘扫描（8:45→11:30）
         env:
           MX_APIKEY: ${{ secrets.MX_APIKEY }}
           SCAN_DEADLINE: "11:30"

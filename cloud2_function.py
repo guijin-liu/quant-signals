@@ -80,7 +80,7 @@ def is_trading_day():
 def market_state():
     now = bj_now()
     t = now.hour * 60 + now.minute
-    if t < 9 * 60 + 25:    return "pre"
+    if t < 8 * 60 + 45:    return "pre"
     if t < 11 * 60 + 30:   return "morning"
     if t < 13 * 60:        return "lunch"
     if t < 15 * 60 + 1:    return "afternoon"
