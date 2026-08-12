@@ -2,7 +2,7 @@ name: 量化买卖点扫描·下午
 
 on:
   schedule:
-    # 北京时间 13:00 触发（UTC 5:00），下午段跑到 15:01 收盘（market_state 自动 closed 退出）
+    # 北京时间 13:00 触发（UTC 5:00），下午段跑到 15:00 收盘（market_state 自动 closed 退出）
     - cron: '0 5 * * 0-4'
   workflow_dispatch:
 
@@ -28,11 +28,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: 下午盘扫描（13:00→15:01）
+      - name: 下午盘扫描（13:00→15:00）
         env:
           DEEPSEEK_KEY: ${{ secrets.DEEPSEEK_KEY }}
           MX_APIKEY: ${{ secrets.MX_APIKEY }}
-          SCAN_DEADLINE: "15:30"
+          SCAN_DEADLINE: "15:00"
         run: python cloud_function.py
 
       - name: 故障告警

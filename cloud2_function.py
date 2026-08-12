@@ -83,7 +83,7 @@ def market_state():
     if t < 8 * 60 + 45:    return "pre"
     if t < 11 * 60 + 30:   return "morning"
     if t < 13 * 60:        return "lunch"
-    if t < 15 * 60 + 1:    return "afternoon"
+    if t < 15 * 60:        return "afternoon"
     return "closed"
 
 
@@ -185,8 +185,8 @@ def main_loop():
     bought_today = set()
     all_day = []
 
-    # 截止时间可配置（多段运行跳过午休：上午段 SCAN_DEADLINE=11:30，下午段默认15:30）
-    eh, em = 15, 30
+    # 截止时间可配置（多段运行跳过午休：上午段 SCAN_DEADLINE=11:30，下午段默认15:00）
+    eh, em = 15, 0
     env_deadline = os.environ.get("SCAN_DEADLINE", "")
     if env_deadline and ":" in env_deadline:
         eh, em = map(int, env_deadline.split(":")[:2])
