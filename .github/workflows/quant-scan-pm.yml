@@ -2,8 +2,8 @@ name: 量化买卖点扫描·下午
 
 on:
   schedule:
-    # 北京时间 13:00 触发（UTC 5:00），下午段跑到 15:00 收盘（market_state 自动 closed 退出）
-    - cron: '0 5 * * 0-4'
+    # 北京时间 13:00 触发（UTC 5:00），周一~周五，下午段跑到 15:00 收盘（market_state 自动 closed 退出）
+    - cron: '0 5 * * 0-5'
   workflow_dispatch:
 
 jobs:
