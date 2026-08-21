@@ -311,7 +311,7 @@ def em_fetch_hot_rank(n=50) -> list:
                 codes = [x.get("sc", "") for x in data]
                 names = em_fetch_names_by_codes(codes)
                 rows = [{"code": c[2:] if len(c) > 2 else c,
-                         "name": names.get(c[2:], c), "rank": i + 1}
+                         "name": names.get(c[2:], c[2:]), "rank": i + 1}
                         for i, c in enumerate(codes) if c]
                 logger.info(f"东财人气榜: {len(rows)}只")
                 return rows[:n]
