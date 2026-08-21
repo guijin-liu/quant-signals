@@ -38,22 +38,14 @@ jobs:
 
       - name: 热点池完整性检查
         run: |
-          python - <<'EOF'
+          python -c '
 import json, glob, os, urllib.request
-files = sorted(glob.glob('data/hot_pool/*.json'))
-if not files:
-    print('无热点池文件')
-else:
-    d = json.load(open(files[-1], encoding='utf-8'))
-    cnt = d.get('count', 0)
-    print(f'最新热点池 {os.path.basename(files[-1])}: {cnt}只')
+files = sorted(glob.glob("data/hot_pool/*.json"))
+if files:
+    d = json.load(open(files[-1], encoding="utf-8"))
+    cnt = d.get("count", 0)
+    print("热点池 " + os.path.basename(files[-1]) + ": " + str(cnt) + "只")
     if cnt < 50:
-        body = json.dumps({
-            'token': 'f3fb5c092ba34785b6857bb45d23d4fa',
-            'title': '⚠️ 3号热点池不完整',
-            'content': f'<div>最新热点池仅{cnt}只，不足50，人气榜/换手率榜异常，请检查</div>',
-            'template': 'html',
-        }).encode()
-        urllib.request.urlopen('http://www.pushplus.plus/send', body, timeout=10)
-        print('ALERT: 已发不完整告警')
-EOF
+        body = json.dumps({"token":"f3fb5c092ba34785b6857bb45d23d4fa","title":"⚠️ 3号热点池不完整","content":"<div>最新热点池仅" + str(cnt) + "只，不足50，请检查</div>","template":"html"}).encode()
+        urllib.request.urlopen("http://www.pushplus.plus/send", body, timeout=10)
+'
