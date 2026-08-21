@@ -96,6 +96,15 @@ def em_fetch_top_amount(n=150) -> list:
     if not all_rows:
         logger.warning("东财 top_amount 全失败，降级新浪排行兜底")
         return em_fetch_top_amount_sina(n)
+    if len(all_rows) < n:
+        logger.warning(f"东财仅拉到{len(all_rows)}/{n}，新浪补足缺口")
+        sina = em_fetch_top_amount_sina(n)
+        merged = {r["code"]: r for r in all_rows}
+        for r in sina:
+            merged.setdefault(r["code"], r)
+        rows = sorted(merged.values(), key=lambda r: r.get("amount", 0), reverse=True)
+        logger.info(f"补足后: {len(rows)}/{n}")
+        return rows[:n]
     return all_rows[:n]
 
 

@@ -35,3 +35,25 @@ jobs:
           else
             echo "无新榜单"
           fi
+
+      - name: 榜单完整性检查
+        run: |
+          python - <<'EOF'
+import json, glob, os, urllib.request
+files = sorted(glob.glob('data/top_amount/*.json'))
+if not files:
+    print('无榜单文件')
+else:
+    d = json.load(open(files[-1], encoding='utf-8'))
+    cnt = d.get('count', 0)
+    print(f'最新榜单 {os.path.basename(files[-1])}: {cnt}只')
+    if cnt < 150:
+        body = json.dumps({
+            'token': 'f3fb5c092ba34785b6857bb45d23d4fa',
+            'title': '⚠️ 2号动态池榜单不完整',
+            'content': f'<div>最新榜单仅{cnt}只，不足150，东财/新浪拉取异常，请检查</div>',
+            'template': 'html',
+        }).encode()
+        urllib.request.urlopen('http://www.pushplus.plus/send', body, timeout=10)
+        print('ALERT: 已发不完整告警')
+EOF

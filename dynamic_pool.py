@@ -46,6 +46,22 @@ def load_pool_window(days=DAYS, as_of=None):
     return pool
 
 
+def load_latest_pool(as_of=None):
+    """当日固定池 = 最新一个交易日收盘成交额前150。
+    掉出150名的票自动去除，新进150名的自动加入。返回 {code: name}。"""
+    files = sorted(glob.glob(os.path.join(POOL_DIR, "*.json")))
+    if as_of:
+        files = [p for p in files if os.path.basename(p)[:8] <= as_of]
+    if not files:
+        logger.error("无榜单文件，返回空池")
+        return {}
+    with open(files[-1], encoding="utf-8") as f:
+        data = json.load(f)
+    pool = {s["code"]: s.get("name", s["code"]) for s in data.get("stocks", []) if s.get("code")}
+    logger.info(f"当日固定池(最新{os.path.basename(files[-1])[:8]}): {len(pool)}只")
+    return pool
+
+
 def main():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
     args = sys.argv[1:]

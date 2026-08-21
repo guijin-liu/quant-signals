@@ -10,7 +10,7 @@ import requests
 
 import em_client
 import mx_fetcher
-from dynamic_pool import load_pool_window
+from dynamic_pool import load_latest_pool
 from backtest_miner2 import compute_feature_matrix, CONDITIONS
 from fund_eval import fund_eval
 
@@ -158,7 +158,7 @@ def push_signal(r, scan_time):
                f'<tr><td>RSI</td><td>{r["rsi"]}</td><td>BB%</td><td>{r["bb"]}</td></tr>'
                f'<tr><td colspan="4" style="color:#8e44ad">💰 {eval_txt}</td></tr>'
                f'</table>'
-               f'<p style="color:#888;font-size:11px">{scan_time} | {APP_NAME} | 动态池+85%规则+资金流</p></div>')
+               f'<p style="color:#888;font-size:11px">{scan_time} | {APP_NAME} | 当日固定池(成交额前150)+85%规则+资金流</p></div>')
     push_msg(title, content)
 
 
@@ -175,11 +175,11 @@ def main_loop():
         return
     logger.info(f"加载 {len(rules)} 条规则")
 
-    pool = load_pool_window(5)
+    pool = load_latest_pool()
     if not pool:
-        logger.error("动态池为空（data/top_amount 无榜单），退出")
+        logger.error("当日池为空（data/top_amount 无榜单），退出")
         return
-    logger.info(f"动态池 {len(pool)} 只")
+    logger.info(f"当日固定池 {len(pool)} 只")
 
     pushed = set()
     bought_today = set()
@@ -250,7 +250,7 @@ def main_loop():
                  f'<div style="font-size:14px;padding:10px">{lines}<p style="color:#888">⚠️ T+1：今日买入最快明日可卖</p></div>')
     else:
         push_msg(f"☁️{APP_NAME} {end_str} 今日无信号",
-                 f'<div>动态池{len(pool)}只，{scan_count}轮扫描无规则命中</div>')
+                 f'<div>当日固定池{len(pool)}只，{scan_count}轮扫描无规则命中</div>')
 
 
 if __name__ == "__main__":
