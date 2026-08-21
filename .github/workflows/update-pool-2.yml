@@ -39,13 +39,13 @@ jobs:
       - name: 榜单完整性检查
         run: |
           python -c '
-import json, glob, os, urllib.request
-files = sorted(glob.glob("data/top_amount/*.json"))
-if files:
-    d = json.load(open(files[-1], encoding="utf-8"))
-    cnt = d.get("count", 0)
-    print("最新榜单 " + os.path.basename(files[-1]) + ": " + str(cnt) + "只")
-    if cnt < 150:
-        body = json.dumps({"token":"f3fb5c092ba34785b6857bb45d23d4fa","title":"⚠️ 2号动态池榜单不完整","content":"<div>最新榜单仅" + str(cnt) + "只，不足150，东财/新浪拉取异常，请检查</div>","template":"html"}).encode()
-        urllib.request.urlopen("http://www.pushplus.plus/send", body, timeout=10)
-'
+          import json, glob, os, urllib.request
+          files = sorted(glob.glob("data/top_amount/*.json"))
+          if files:
+              d = json.load(open(files[-1], encoding="utf-8"))
+              cnt = d.get("count", 0)
+              print("最新榜单 " + os.path.basename(files[-1]) + ": " + str(cnt) + "只")
+              if cnt < 150:
+                  body = json.dumps({"token":"f3fb5c092ba34785b6857bb45d23d4fa","title":"⚠️ 2号动态池榜单不完整","content":"<div>最新榜单仅" + str(cnt) + "只，不足150，东财/新浪拉取异常，请检查</div>","template":"html"}).encode()
+                  urllib.request.urlopen("http://www.pushplus.plus/send", body, timeout=10)
+          '
