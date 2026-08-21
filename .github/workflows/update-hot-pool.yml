@@ -1,0 +1,59 @@
+name: 更新3号热点池
+
+on:
+  schedule:
+    # 北京时间 15:45（UTC 7:45），收盘后更新当日人气榜前50
+    - cron: '45 7 * * 1-5'
+  workflow_dispatch:
+
+jobs:
+  update-hot-pool:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install requests pandas numpy
+
+      - name: 拉取当日人气榜前50
+        run: python hot_pool.py --save-today
+
+      - name: commit回仓库
+        run: |
+          git config user.name "quant-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add data/hot_pool/
+          if ! git diff --cached --quiet; then
+            git commit -m "update 3号热点池 $(TZ='Asia/Shanghai' date +%Y%m%d)"
+            git push origin HEAD:master
+          else
+            echo "无新榜单"
+          fi
+
+      - name: 热点池完整性检查
+        run: |
+          python - <<'EOF'
+import json, glob, os, urllib.request
+files = sorted(glob.glob('data/hot_pool/*.json'))
+if not files:
+    print('无热点池文件')
+else:
+    d = json.load(open(files[-1], encoding='utf-8'))
+    cnt = d.get('count', 0)
+    print(f'最新热点池 {os.path.basename(files[-1])}: {cnt}只')
+    if cnt < 50:
+        body = json.dumps({
+            'token': 'f3fb5c092ba34785b6857bb45d23d4fa',
+            'title': '⚠️ 3号热点池不完整',
+            'content': f'<div>最新热点池仅{cnt}只，不足50，人气榜/换手率榜异常，请检查</div>',
+            'template': 'html',
+        }).encode()
+        urllib.request.urlopen('http://www.pushplus.plus/send', body, timeout=10)
+        print('ALERT: 已发不完整告警')
+EOF

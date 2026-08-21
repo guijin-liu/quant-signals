@@ -277,3 +277,139 @@ if __name__ == "__main__":
         print(f"15minK线: {len(k)}根", k.iloc[-1]["date"] if len(k) else "")
         f = em_fund_flow_120d(code)
         print(f"资金流120日: {len(f)}天", (f[-1]["date"], f[-1]["main_net"]) if f else "")
+
+
+# ═══════════════════════════════════════════════
+# 5. 东财人气榜（3号热点池数据源）
+# ═══════════════════════════════════════════════
+
+HOT_RANK_URL = "https://emappdata.eastmoney.com/stockrank/getAllCurrentList"
+
+
+def em_fetch_hot_rank(n=50) -> list:
+    """东财人气榜（股吧热度）前n → [{code,name,rank}]。
+    关键：body不带sortType字段 + Origin header，否则返回code=-2。
+    失败重试3次，仍失败返回[]（调用方降级换手率榜）。"""
+    headers = {
+        "Content-Type": "application/json",
+        "User-Agent": UA,
+        "Referer": "https://data.eastmoney.com/xuangu/",
+        "Accept": "application/json",
+        "Origin": "https://data.eastmoney.com",
+    }
+    body = {"appId": "appId01", "globalId": "786e4c21-70dc-435a-93bb-38",
+            "marketType": "沪A", "pageNo": 1, "pageSize": 100}
+    for attempt in range(3):
+        try:
+            wait = EM_MIN_INTERVAL - (time.time() - _em_last_call[0])
+            if wait > 0:
+                time.sleep(wait + random.uniform(0.1, 0.5))
+            r = requests.post(HOT_RANK_URL, json=body, headers=headers, timeout=15)
+            d = r.json()
+            data = d.get("data") or []
+            if d.get("code") == 0 and isinstance(data, list) and data:
+                codes = [x.get("sc", "") for x in data]
+                names = em_fetch_names_by_codes(codes)
+                rows = [{"code": c[2:] if len(c) > 2 else c,
+                         "name": names.get(c[2:], c), "rank": i + 1}
+                        for i, c in enumerate(codes) if c]
+                logger.info(f"东财人气榜: {len(rows)}只")
+                return rows[:n]
+            logger.warning(f"人气榜 attempt{attempt+1} code={d.get('code')}, retry")
+        except Exception as e:
+            logger.warning(f"人气榜 attempt{attempt+1} 异常: {e}")
+        time.sleep(2 * (attempt + 1))
+    return []
+
+
+def em_fetch_hot_rank_fallback(n=50) -> list:
+    """人气榜备用：换手率榜前n（热度代理）。东财f8 → 新浪turnoverratio 双源降级。"""
+    rows = em_fetch_top_amount_turnover(n, src="em")
+    if rows:
+        return rows
+    return em_fetch_top_amount_turnover(n, src="sina")
+
+
+def em_fetch_top_amount_turnover(n=50, src="em") -> list:
+    """换手率前n → [{code,name,amount,turnover}]。src=em(东财f8) / sina(新浪turnoverratio)"""
+    if src == "em":
+        out, seen, pn = [], set(), 1
+        while len(out) < n and pn <= 2:
+            params = {"pn": str(pn), "pz": "100", "po": "1", "np": "1", "fltt": "2", "invt": "2",
+                      "dect": "1", "fid": "f8", "fs": FS_ALL_A,
+                      "fields": "f2,f3,f6,f8,f12,f14", "_": str(int(time.time() * 1000))}
+            headers = {"User-Agent": UA, "Referer": "https://quote.eastmoney.com/"}
+            try:
+                r = em_get(TOP_URL, params=params, headers=headers, timeout=15)
+                diff = (r.json().get("data") or {}).get("diff") or []
+            except Exception as e:
+                logger.error(f"换手率榜em p{pn}: {e}")
+                break
+            if not diff:
+                break
+            new = 0
+            for it in diff:
+                code = it.get("f12", "")
+                if not code or code in seen:
+                    continue
+                seen.add(code)
+                out.append({"code": code, "name": it.get("f14", ""),
+                            "amount": it.get("f6", 0), "turnover": it.get("f8", 0)})
+                new += 1
+            if new == 0:
+                break
+            pn += 1
+        logger.info(f"换手率榜(东财f8): {len(out)}只")
+        return out[:n]
+    url = "https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/Market_Center.getHQNodeData"
+    out, seen, page = [], set(), 1
+    while len(out) < n and page <= 2:
+        params = {"page": str(page), "num": "100", "sort": "turnoverratio", "asc": "0", "node": "hs_a"}
+        try:
+            r = requests.get(url, params=params, headers={"User-Agent": UA,
+                "Referer": "https://finance.sina.com.cn/"}, timeout=12)
+            diff = r.json()
+        except Exception as e:
+            logger.error(f"换手率榜sina p{page}: {e}")
+            break
+        if not diff:
+            break
+        new = 0
+        for it in diff:
+            sym = str(it.get("symbol", ""))
+            code = sym[-6:] if sym else ""
+            if not code or code in seen:
+                continue
+            seen.add(code)
+            out.append({"code": code, "name": it.get("name", ""),
+                        "amount": it.get("amount", 0), "turnover": it.get("turnoverratio", 0)})
+            new += 1
+        if new == 0:
+            break
+        page += 1
+    logger.info(f"换手率榜(新浪): {len(out)}只")
+    return out[:n]
+
+
+def em_fetch_names_by_codes(codes) -> dict:
+    """新浪批量行情补名称：list=sh688836,sz002491 → {code: name}"""
+    if not codes:
+        return {}
+    syms = [c.lower() for c in codes if c]
+    url = "https://hq.sinajs.cn/list=" + ",".join(syms)
+    try:
+        r = requests.get(url, headers={"User-Agent": UA, "Referer": "https://finance.sina.com.cn/"}, timeout=10)
+        r.encoding = "gbk"
+        names = {}
+        import re
+        for line in r.text.strip().split("\n"):
+            m = re.match(r'var hq_str_(\w+)="([^"]*)"', line.strip())
+            if m:
+                sym, vals = m.groups()
+                nm = vals.split(",")[0] if vals else ""
+                if nm:
+                    names[sym[2:]] = nm
+        return names
+    except Exception as e:
+        logger.error(f"新浪批量名称失败: {e}")
+        return {}

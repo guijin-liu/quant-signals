@@ -1,0 +1,38 @@
+name: 量化买卖点扫描3号·下午
+
+on:
+  schedule:
+    # 北京时间 13:10 触发（UTC 5:10），周一~周五，下午段跑到 15:00 收盘
+    - cron: '10 5 * * 0-5'
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: 同步最新热点池
+        run: git pull --rebase origin master || true
+
+      - name: 3号下午盘扫描（13:10→15:00）
+        env:
+          MX_APIKEY: ${{ secrets.MX_APIKEY }}
+          SCAN_DEADLINE: "15:00"
+        run: python cloud3_function.py
+
+      - name: 故障告警
+        if: failure()
+        run: |
+          curl -s -X POST http://www.pushplus.plus/send \
+            -H "Content-Type: application/json" \
+            -d '{"token":"f3fb5c092ba34785b6857bb45d23d4fa","title":"🚨 刘圭金3号扫描故障(下午)","content":"<div style=\"color:#e74c3c;padding:15px\"><h2>GitHub Actions 3号下午扫描失败</h2><p>时间: '"$(TZ='Asia/Shanghai' date +'%m/%d %H:%M')"'</p></div>","template":"html"}'
