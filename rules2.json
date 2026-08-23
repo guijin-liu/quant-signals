@@ -1,5 +1,5 @@
 {
-  "generated": "2026-08-09 02:59",
+  "generated": "2026-08-23 02:38",
   "strategy": "2号: 动态池(成交额top150×5日) + 全量指标 + 主力资金流",
   "win_def": "买入后8根15分钟K线内最高涨幅≥1%为胜",
   "hold_bars": 8,
@@ -9,145 +9,142 @@
   "rules": [
     {
       "conditions": [
-        "rsi_lt30",
         "fund_super_in",
-        "bb_midlow",
-        "adx_gt25"
+        "rsi_lt30"
       ],
-      "n": 43,
+      "n": 35,
       "wr": 100.0,
-      "avg_gain": 6.82,
+      "avg_gain": 6.53,
       "fund_split": {
         "inflow": {
-          "n": 30,
+          "n": 18,
           "wr": 100.0
         },
         "outflow": {
-          "n": 13,
+          "n": 17,
           "wr": 100.0
         }
       },
       "fund_required": false,
-      "sell_pct": 6.1,
+      "sell_pct": 5.9,
       "id": "R001"
     },
     {
       "conditions": [
-        "bb_low",
         "fund_super_in",
-        "rsi_lt30",
-        "adx_gt25"
+        "bb_low",
+        "adx_gt25",
+        "j_lt30"
       ],
-      "n": 41,
+      "n": 39,
       "wr": 100.0,
-      "avg_gain": 6.69,
+      "avg_gain": 7.01,
       "fund_split": {
         "inflow": {
-          "n": 28,
+          "n": 14,
           "wr": 100.0
         },
         "outflow": {
-          "n": 13,
+          "n": 25,
           "wr": 100.0
         }
       },
       "fund_required": false,
-      "sell_pct": 6.0,
+      "sell_pct": 6.3,
       "id": "R002"
     },
     {
       "conditions": [
-        "macd_golden",
-        "pos_lt40",
-        "adx_gt25",
-        "obv_up"
+        "rsi_lt30",
+        "wr_lt20",
+        "bb_midlow"
       ],
-      "n": 51,
-      "wr": 94.1,
-      "avg_gain": 6.11,
+      "n": 36,
+      "wr": 100.0,
+      "avg_gain": 8.96,
       "fund_split": {
         "inflow": {
-          "n": 12,
-          "wr": 100.0
+          "n": 0,
+          "wr": null
         },
         "outflow": {
-          "n": 39,
-          "wr": 92.3
+          "n": 36,
+          "wr": 100.0
         }
       },
       "fund_required": false,
-      "sell_pct": 5.5,
+      "sell_pct": 8.1,
       "id": "R003"
     },
     {
       "conditions": [
-        "rsi_lt30",
-        "obv_up",
-        "j_lt30"
+        "j_lt30",
+        "wr_lt20",
+        "bb_midlow"
       ],
-      "n": 67,
-      "wr": 94.0,
-      "avg_gain": 5.45,
+      "n": 32,
+      "wr": 100.0,
+      "avg_gain": 8.89,
       "fund_split": {
         "inflow": {
-          "n": 15,
-          "wr": 100.0
+          "n": 0,
+          "wr": null
         },
         "outflow": {
-          "n": 52,
-          "wr": 92.3
+          "n": 32,
+          "wr": 100.0
         }
       },
       "fund_required": false,
-      "sell_pct": 4.9,
+      "sell_pct": 8.0,
       "id": "R004"
     },
     {
       "conditions": [
-        "rsi_lt30",
-        "fund_large_in",
+        "fund_in",
         "pos_lt40",
-        "vol_up"
+        "adx_gt25",
+        "fund_super_in"
       ],
-      "n": 112,
-      "wr": 93.8,
-      "avg_gain": 6.76,
+      "n": 49,
+      "wr": 98.0,
+      "avg_gain": 5.23,
       "fund_split": {
         "inflow": {
-          "n": 60,
-          "wr": 93.3
+          "n": 49,
+          "wr": 98.0
         },
         "outflow": {
-          "n": 52,
-          "wr": 94.2
+          "n": 0,
+          "wr": null
         }
       },
       "fund_required": false,
-      "sell_pct": 6.1,
+      "sell_pct": 4.7,
       "id": "R005"
     },
     {
       "conditions": [
+        "fund_strong",
         "pos_lt40",
-        "golden",
-        "bb_midlow",
-        "adx_gt25"
+        "adx_gt25",
+        "fund_super_in"
       ],
-      "n": 110,
-      "wr": 88.2,
-      "avg_gain": NaN,
+      "n": 49,
+      "wr": 98.0,
+      "avg_gain": 5.23,
       "fund_split": {
         "inflow": {
-          "n": 5,
-          "wr": null
+          "n": 49,
+          "wr": 98.0
         },
         "outflow": {
-          "n": 105,
-          "wr": 88.6
+          "n": 0,
+          "wr": null
         }
       },
       "fund_required": false,
-      "sell_pct": 1.0,
+      "sell_pct": 4.7,
       "id": "R006"
     }
   ]
