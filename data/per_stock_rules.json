@@ -1,0 +1,1358 @@
+{
+ "300308": {
+  "name": "中际旭创",
+  "rules": [
+   {
+    "conditions": [
+     "ma_bear_full"
+    ],
+    "n": 42,
+    "wr": 90.5,
+    "ci": 77.9
+   }
+  ],
+  "best": {
+   "conditions": [
+    "ma_bear_full"
+   ],
+   "n": 42,
+   "wr": 90.5,
+   "ci": 77.9
+  }
+ },
+ "600487": {
+  "name": "亨通光电",
+  "rules": [
+   {
+    "conditions": [
+     "ma_bear_short"
+    ],
+    "n": 34,
+    "wr": 100.0,
+    "ci": 90.0
+   },
+   {
+    "conditions": [
+     "j_lt30"
+    ],
+    "n": 29,
+    "wr": 86.2,
+    "ci": 69.3
+   },
+   {
+    "conditions": [
+     "bb_midlow"
+    ],
+    "n": 36,
+    "wr": 86.1,
+    "ci": 71.2
+   }
+  ],
+  "best": {
+   "conditions": [
+    "ma_bear_short"
+   ],
+   "n": 34,
+   "wr": 100.0,
+   "ci": 90.0
+  }
+ },
+ "688825": {
+  "name": "长鑫科技",
+  "rules": [
+   {
+    "conditions": [
+     "rsi_30_45"
+    ],
+    "n": 42,
+    "wr": 81.0,
+    "ci": 66.6
+   },
+   {
+    "conditions": [
+     "j_lt30"
+    ],
+    "n": 41,
+    "wr": 80.5,
+    "ci": 65.9
+   }
+  ],
+  "best": {
+   "conditions": [
+    "rsi_30_45"
+   ],
+   "n": 42,
+   "wr": 81.0,
+   "ci": 66.6
+  }
+ },
+ "603986": {
+  "name": "兆易创新",
+  "rules": [
+   {
+    "conditions": [
+     "rsi_30_45"
+    ],
+    "n": 26,
+    "wr": 92.3,
+    "ci": 75.7
+   },
+   {
+    "conditions": [
+     "ma_bear_short"
+    ],
+    "n": 29,
+    "wr": 89.7,
+    "ci": 73.5
+   },
+   {
+    "conditions": [
+     "bb_midlow"
+    ],
+    "n": 36,
+    "wr": 80.6,
+    "ci": 64.8
+   }
+  ],
+  "best": {
+   "conditions": [
+    "rsi_30_45"
+   ],
+   "n": 26,
+   "wr": 92.3,
+   "ci": 75.7
+  }
+ },
+ "300502": {
+  "name": "新易盛",
+  "rules": [
+   {
+    "conditions": [
+     "ma_bear_full"
+    ],
+    "n": 36,
+    "wr": 91.7,
+    "ci": 78.1
+   }
+  ],
+  "best": {
+   "conditions": [
+    "ma_bear_full"
+   ],
+   "n": 36,
+   "wr": 91.7,
+   "ci": 78.1
+  }
+ },
+ "688008": {
+  "name": "澜起科技",
+  "rules": [
+   {
+    "conditions": [
+     "rsi_30_45"
+    ],
+    "n": 33,
+    "wr": 81.8,
+    "ci": 65.5
+   }
+  ],
+  "best": {
+   "conditions": [
+    "rsi_30_45"
+   ],
+   "n": 33,
+   "wr": 81.8,
+   "ci": 65.5
+  }
+ },
+ "600183": {
+  "name": "生益科技",
+  "rules": [
+   {
+    "conditions": [
+     "rsi_30_45"
+    ],
+    "n": 30,
+    "wr": 100.0,
+    "ci": 88.8
+   },
+   {
+    "conditions": [
+     "ma_bear_short"
+    ],
+    "n": 35,
+    "wr": 97.1,
+    "ci": 85.5
+   },
+   {
+    "conditions": [
+     "j_lt30"
+    ],
+    "n": 37,
+    "wr": 94.6,
+    "ci": 82.3
+   }
+  ],
+  "best": {
+   "conditions": [
+    "rsi_30_45"
+   ],
+   "n": 30,
+   "wr": 100.0,
+   "ci": 88.8
+  }
+ },
+ "600522": {
+  "name": "中天科技",
+  "rules": [
+   {
+    "conditions": [
+     "ma_bear_short"
+    ],
+    "n": 36,
+    "wr": 97.2,
+    "ci": 85.8
+   },
+   {
+    "conditions": [
+     "rsi_30_45"
+    ],
+    "n": 34,
+    "wr": 91.2,
+    "ci": 76.9
+   },
+   {
+    "conditions": [
+     "bb_midlow"
+    ],
+    "n": 43,
+    "wr": 90.7,
+    "ci": 78.3
+   }
+  ],
+  "best": {
+   "conditions": [
+    "ma_bear_short"
+   ],
+   "n": 36,
+   "wr": 97.2,
+   "ci": 85.8
+  }
+ },
+ "002384": {
+  "name": "东山精密",
+  "rules": [
+   {
+    "conditions": [
+     "ma_bear_full"
+    ],
+    "n": 35,
+    "wr": 97.1,
+    "ci": 85.5
+   },
+   {
+    "conditions": [
+     "rsi_30_45"
+    ],
+    "n": 40,
+    "wr": 85.0,
+    "ci": 70.8
+   },
+   {
+    "conditions": [
+     "ma_bear_short"
+    ],
+    "n": 45,
+    "wr": 80.0,
+    "ci": 66.1
+   }
+  ],
+  "best": {
+   "conditions": [
+    "ma_bear_full"
+   ],
+   "n": 35,
+   "wr": 97.1,
+   "ci": 85.5
+  }
+ },
+ "300476": {
+  "name": "胜宏科技",
+  "rules": [
+   {
+    "conditions": [
+     "rsi_30_45"
+    ],
+    "n": 29,
+    "wr": 93.1,
+    "ci": 77.9
+   },
+   {
+    "conditions": [
+     "wr_gt80"
+    ],
+    "n": 27,
+    "wr": 92.6,
+    "ci": 76.5
+   },
+   {
+    "conditions": [
+     "ma_bear_short"
+    ],
+    "n": 30,
+    "wr": 86.7,
+    "ci": 70.2
+   }
+  ],
+  "best": {
+   "conditions": [
+    "rsi_30_45"
+   ],
+   "n": 29,
+   "wr": 93.1,
+   "ci": 77.9
+  }
+ },
+ "600176": {
+  "name": "中国巨石",
+  "rules": [
+   {
+    "conditions": [
+     "rsi_45_60"
+    ],
+    "n": 44,
+    "wr": 93.2,
+    "ci": 81.7
+   }
+  ],
+  "best": {
+   "conditions": [
+    "rsi_45_60"
+   ],
+   "n": 44,
+   "wr": 93.2,
+   "ci": 81.7
+  }
+ },
+ "688256": {
+  "name": "寒武纪",
+  "rules": [
+   {
+    "conditions": [
+     "ma_bear_full"
+    ],
+    "n": 36,
+    "wr": 91.7,
+    "ci": 78.1
+   }
+  ],
+  "best": {
+   "conditions": [
+    "ma_bear_full"
+   ],
+   "n": 36,
+   "wr": 91.7,
+   "ci": 78.1
+  }
+ },
+ "001309": {
+  "name": "德明利",
+  "rules": [
+   {
+    "conditions": [
+     "ma_bear_full"
+    ],
+    "n": 25,
+    "wr": 96.0,
+    "ci": 80.4
+   },
+   {
+    "conditions": [
+     "rsi_30_45"
+    ],
+    "n": 40,
+    "wr": 95.0,
+    "ci": 83.5
+   },
+   {
+    "conditions": [
+     "ma_bear_short"
+    ],
+    "n": 36,
+    "wr": 80.6,
+    "ci": 64.8
+   }
+  ],
+  "best": {
+   "conditions": [
+    "ma_bear_full"
+   ],
+   "n": 25,
+   "wr": 96.0,
+   "ci": 80.4
+  }
+ },
+ "002428": {
+  "name": "云南锗业",
+  "rules": [
+   {
+    "conditions": [
+     "rsi_30_45"
+    ],
+    "n": 42,
+    "wr": 83.3,
+    "ci": 69.3
+   }
+  ],
+  "best": {
+   "conditions": [
+    "rsi_30_45"
+   ],
+   "n": 42,
+   "wr": 83.3,
+   "ci": 69.3
+  }
+ },
+ "601899": {
+  "name": "紫金矿业",
+  "rules": [
+   {
+    "conditions": [
+     "rsi_30_45"
+    ],
+    "n": 25,
+    "wr": 100.0,
+    "ci": 86.8
+   },
+   {
+    "conditions": [
+     "bb_low"
+    ],
+    "n": 28,
+    "wr": 85.7,
+    "ci": 68.3
+   },
+   {
+    "conditions": [
+     "pos_lt40"
+    ],
+    "n": 35,
+    "wr": 82.9,
+    "ci": 67.2
+   }
+  ],
+  "best": {
+   "conditions": [
+    "rsi_30_45"
+   ],
+   "n": 25,
+   "wr": 100.0,
+   "ci": 86.8
+  }
+ },
+ "002463": {
+  "name": "沪电股份",
+  "rules": [
+   {
+    "conditions": [
+     "rsi_30_45"
+    ],
+    "n": 39,
+    "wr": 89.7,
+    "ci": 76.3
+   },
+   {
+    "conditions": [
+     "ma_bear_short"
+    ],
+    "n": 32,
+    "wr": 87.5,
+    "ci": 71.8
+   },
+   {
+    "conditions": [
+     "pos_lt40"
+    ],
+    "n": 55,
+    "wr": 87.3,
+    "ci": 75.9
+   }
+  ],
+  "best": {
+   "conditions": [
+    "rsi_30_45"
+   ],
+   "n": 39,
+   "wr": 89.7,
+   "ci": 76.3
+  }
+ },
+ "300285": {
+  "name": "国瓷材料",
+  "rules": [
+   {
+    "conditions": [
+     "rsi_45_60"
+    ],
+    "n": 32,
+    "wr": 93.8,
+    "ci": 79.8
+   }
+  ],
+  "best": {
+   "conditions": [
+    "rsi_45_60"
+   ],
+   "n": 32,
+   "wr": 93.8,
+   "ci": 79.8
+  }
+ },
+ "603083": {
+  "name": "剑桥科技",
+  "rules": [
+   {
+    "conditions": [
+     "long_lower_shadow"
+    ],
+    "n": 32,
+    "wr": 81.2,
+    "ci": 64.5
+   }
+  ],
+  "best": {
+   "conditions": [
+    "long_lower_shadow"
+   ],
+   "n": 32,
+   "wr": 81.2,
+   "ci": 64.5
+  }
+ },
+ "002491": {
+  "name": "通鼎互联",
+  "rules": [
+   {
+    "conditions": [
+     "ma_bear_short"
+    ],
+    "n": 25,
+    "wr": 100.0,
+    "ci": 86.8
+   },
+   {
+    "conditions": [
+     "bb_midlow"
+    ],
+    "n": 32,
+    "wr": 90.6,
+    "ci": 75.7
+   },
+   {
+    "conditions": [
+     "rsi_45_60"
+    ],
+    "n": 29,
+    "wr": 89.7,
+    "ci": 73.5
+   }
+  ],
+  "best": {
+   "conditions": [
+    "ma_bear_short"
+   ],
+   "n": 25,
+   "wr": 100.0,
+   "ci": 86.8
+  }
+ },
+ "002837": {
+  "name": "英维克",
+  "rules": [
+   {
+    "conditions": [
+     "long_lower_shadow"
+    ],
+    "n": 33,
+    "wr": 81.8,
+    "ci": 65.5
+   },
+   {
+    "conditions": [
+     "obv_up"
+    ],
+    "n": 75,
+    "wr": 80.0,
+    "ci": 69.5
+   }
+  ],
+  "best": {
+   "conditions": [
+    "long_lower_shadow"
+   ],
+   "n": 33,
+   "wr": 81.8,
+   "ci": 65.5
+  }
+ },
+ "600498": {
+  "name": "烽火通信",
+  "rules": [
+   {
+    "conditions": [
+     "ma_bear_short"
+    ],
+    "n": 37,
+    "wr": 100.0,
+    "ci": 90.7
+   },
+   {
+    "conditions": [
+     "bb_midlow"
+    ],
+    "n": 43,
+    "wr": 93.0,
+    "ci": 81.3
+   },
+   {
+    "conditions": [
+     "pos_lt40"
+    ],
+    "n": 47,
+    "wr": 91.5,
+    "ci": 80.0
+   }
+  ],
+  "best": {
+   "conditions": [
+    "ma_bear_short"
+   ],
+   "n": 37,
+   "wr": 100.0,
+   "ci": 90.7
+  }
+ },
+ "002475": {
+  "name": "立讯精密",
+  "rules": [
+   {
+    "conditions": [
+     "rsi_30_45"
+    ],
+    "n": 32,
+    "wr": 87.5,
+    "ci": 71.8
+   }
+  ],
+  "best": {
+   "conditions": [
+    "rsi_30_45"
+   ],
+   "n": 32,
+   "wr": 87.5,
+   "ci": 71.8
+  }
+ },
+ "600105": {
+  "name": "永鼎股份",
+  "rules": [
+   {
+    "conditions": [
+     "rsi_30_45"
+    ],
+    "n": 29,
+    "wr": 89.7,
+    "ci": 73.5
+   },
+   {
+    "conditions": [
+     "ma_bear_short"
+    ],
+    "n": 30,
+    "wr": 86.7,
+    "ci": 70.2
+   },
+   {
+    "conditions": [
+     "wr_gt80"
+    ],
+    "n": 28,
+    "wr": 82.1,
+    "ci": 64.2
+   }
+  ],
+  "best": {
+   "conditions": [
+    "rsi_30_45"
+   ],
+   "n": 29,
+   "wr": 89.7,
+   "ci": 73.5
+  }
+ },
+ "600362": {
+  "name": "江西铜业",
+  "rules": [
+   {
+    "conditions": [
+     "rsi_30_45"
+    ],
+    "n": 39,
+    "wr": 100.0,
+    "ci": 91.2
+   },
+   {
+    "conditions": [
+     "wr_gt80"
+    ],
+    "n": 33,
+    "wr": 97.0,
+    "ci": 84.7
+   },
+   {
+    "conditions": [
+     "bb_low"
+    ],
+    "n": 27,
+    "wr": 96.3,
+    "ci": 81.7
+   }
+  ],
+  "best": {
+   "conditions": [
+    "rsi_30_45"
+   ],
+   "n": 39,
+   "wr": 100.0,
+   "ci": 91.2
+  }
+ },
+ "601869": {
+  "name": "长飞光纤",
+  "rules": [
+   {
+    "conditions": [
+     "psy_gt50"
+    ],
+    "n": 34,
+    "wr": 100.0,
+    "ci": 90.0
+   },
+   {
+    "conditions": [
+     "rsi_45_60"
+    ],
+    "n": 51,
+    "wr": 96.1,
+    "ci": 86.8
+   },
+   {
+    "conditions": [
+     "price_up_vol_up"
+    ],
+    "n": 32,
+    "wr": 93.8,
+    "ci": 79.8
+   }
+  ],
+  "best": {
+   "conditions": [
+    "psy_gt50"
+   ],
+   "n": 34,
+   "wr": 100.0,
+   "ci": 90.0
+  }
+ },
+ "600206": {
+  "name": "有研新材",
+  "rules": [
+   {
+    "conditions": [
+     "wr_gt80"
+    ],
+    "n": 29,
+    "wr": 96.6,
+    "ci": 82.8
+   }
+  ],
+  "best": {
+   "conditions": [
+    "wr_gt80"
+   ],
+   "n": 29,
+   "wr": 96.6,
+   "ci": 82.8
+  }
+ },
+ "688525": {
+  "name": "佰维存储",
+  "rules": [
+   {
+    "conditions": [
+     "ma_bear_full"
+    ],
+    "n": 27,
+    "wr": 81.5,
+    "ci": 63.1
+   }
+  ],
+  "best": {
+   "conditions": [
+    "ma_bear_full"
+   ],
+   "n": 27,
+   "wr": 81.5,
+   "ci": 63.1
+  }
+ },
+ "688498": {
+  "name": "源杰科技",
+  "rules": [
+   {
+    "conditions": [
+     "j_lt30"
+    ],
+    "n": 31,
+    "wr": 96.8,
+    "ci": 83.8
+   },
+   {
+    "conditions": [
+     "ma_bear_short"
+    ],
+    "n": 30,
+    "wr": 96.7,
+    "ci": 83.3
+   },
+   {
+    "conditions": [
+     "pos_lt40"
+    ],
+    "n": 31,
+    "wr": 93.5,
+    "ci": 79.2
+   }
+  ],
+  "best": {
+   "conditions": [
+    "j_lt30"
+   ],
+   "n": 31,
+   "wr": 96.8,
+   "ci": 83.8
+  }
+ },
+ "000657": {
+  "name": "中钨高新",
+  "rules": [
+   {
+    "conditions": [
+     "ma_bear_full"
+    ],
+    "n": 36,
+    "wr": 83.3,
+    "ci": 68.0
+   }
+  ],
+  "best": {
+   "conditions": [
+    "ma_bear_full"
+   ],
+   "n": 36,
+   "wr": 83.3,
+   "ci": 68.0
+  }
+ },
+ "002156": {
+  "name": "通富微电",
+  "rules": [
+   {
+    "conditions": [
+     "doji"
+    ],
+    "n": 25,
+    "wr": 80.0,
+    "ci": 60.6
+   }
+  ],
+  "best": {
+   "conditions": [
+    "doji"
+   ],
+   "n": 25,
+   "wr": 80.0,
+   "ci": 60.6
+  }
+ },
+ "002716": {
+  "name": "湖南白银",
+  "rules": [
+   {
+    "conditions": [
+     "bb_midlow"
+    ],
+    "n": 34,
+    "wr": 94.1,
+    "ci": 80.8
+   },
+   {
+    "conditions": [
+     "long_upper_shadow"
+    ],
+    "n": 28,
+    "wr": 92.9,
+    "ci": 77.2
+   },
+   {
+    "conditions": [
+     "vol_break"
+    ],
+    "n": 27,
+    "wr": 92.6,
+    "ci": 76.5
+   }
+  ],
+  "best": {
+   "conditions": [
+    "bb_midlow"
+   ],
+   "n": 34,
+   "wr": 94.1,
+   "ci": 80.8
+  }
+ },
+ "603186": {
+  "name": "华正新材",
+  "rules": [
+   {
+    "conditions": [
+     "ma_bear_full"
+    ],
+    "n": 31,
+    "wr": 96.8,
+    "ci": 83.8
+   },
+   {
+    "conditions": [
+     "pos_lt40"
+    ],
+    "n": 58,
+    "wr": 84.5,
+    "ci": 73.0
+   },
+   {
+    "conditions": [
+     "bb_midlow"
+    ],
+    "n": 49,
+    "wr": 83.7,
+    "ci": 70.9
+   }
+  ],
+  "best": {
+   "conditions": [
+    "ma_bear_full"
+   ],
+   "n": 31,
+   "wr": 96.8,
+   "ci": 83.8
+  }
+ },
+ "600460": {
+  "name": "士兰微",
+  "rules": [
+   {
+    "conditions": [
+     "ma_bear_full"
+    ],
+    "n": 27,
+    "wr": 92.6,
+    "ci": 76.5
+   },
+   {
+    "conditions": [
+     "rsi_30_45"
+    ],
+    "n": 44,
+    "wr": 81.8,
+    "ci": 67.9
+   },
+   {
+    "conditions": [
+     "doji"
+    ],
+    "n": 26,
+    "wr": 80.8,
+    "ci": 61.9
+   }
+  ],
+  "best": {
+   "conditions": [
+    "ma_bear_full"
+   ],
+   "n": 27,
+   "wr": 92.6,
+   "ci": 76.5
+  }
+ },
+ "300857": {
+  "name": "协创数据",
+  "rules": [
+   {
+    "conditions": [
+     "ma_bear_full"
+    ],
+    "n": 40,
+    "wr": 80.0,
+    "ci": 65.1
+   }
+  ],
+  "best": {
+   "conditions": [
+    "ma_bear_full"
+   ],
+   "n": 40,
+   "wr": 80.0,
+   "ci": 65.1
+  }
+ },
+ "300570": {
+  "name": "太辰光",
+  "rules": [
+   {
+    "conditions": [
+     "rsi_30_45"
+    ],
+    "n": 37,
+    "wr": 94.6,
+    "ci": 82.3
+   },
+   {
+    "conditions": [
+     "bb_midlow"
+    ],
+    "n": 45,
+    "wr": 93.3,
+    "ci": 82.1
+   },
+   {
+    "conditions": [
+     "ma_bear_short"
+    ],
+    "n": 37,
+    "wr": 91.9,
+    "ci": 78.6
+   }
+  ],
+  "best": {
+   "conditions": [
+    "rsi_30_45"
+   ],
+   "n": 37,
+   "wr": 94.6,
+   "ci": 82.3
+  }
+ },
+ "601212": {
+  "name": "白银有色",
+  "rules": [
+   {
+    "conditions": [
+     "shooting_star"
+    ],
+    "n": 42,
+    "wr": 97.6,
+    "ci": 87.7
+   },
+   {
+    "conditions": [
+     "hammer"
+    ],
+    "n": 47,
+    "wr": 95.7,
+    "ci": 85.7
+   },
+   {
+    "conditions": [
+     "rsi_gt70"
+    ],
+    "n": 51,
+    "wr": 94.1,
+    "ci": 84.1
+   }
+  ],
+  "best": {
+   "conditions": [
+    "shooting_star"
+   ],
+   "n": 42,
+   "wr": 97.6,
+   "ci": 87.7
+  }
+ },
+ "300408": {
+  "name": "三环集团",
+  "rules": [
+   {
+    "conditions": [
+     "ma_bear_full"
+    ],
+    "n": 25,
+    "wr": 88.0,
+    "ci": 69.8
+   },
+   {
+    "conditions": [
+     "rsi_30_45"
+    ],
+    "n": 32,
+    "wr": 84.4,
+    "ci": 68.1
+   }
+  ],
+  "best": {
+   "conditions": [
+    "ma_bear_full"
+   ],
+   "n": 25,
+   "wr": 88.0,
+   "ci": 69.8
+  }
+ },
+ "000977": {
+  "name": "浪潮信息",
+  "rules": [
+   {
+    "conditions": [
+     "rsi_30_45"
+    ],
+    "n": 25,
+    "wr": 84.0,
+    "ci": 65.1
+   }
+  ],
+  "best": {
+   "conditions": [
+    "rsi_30_45"
+   ],
+   "n": 25,
+   "wr": 84.0,
+   "ci": 65.1
+  }
+ },
+ "603993": {
+  "name": "洛阳钼业",
+  "rules": [
+   {
+    "conditions": [
+     "rsi_30_45"
+    ],
+    "n": 29,
+    "wr": 100.0,
+    "ci": 88.4
+   },
+   {
+    "conditions": [
+     "wr_gt80"
+    ],
+    "n": 27,
+    "wr": 88.9,
+    "ci": 71.8
+   },
+   {
+    "conditions": [
+     "pos_lt40"
+    ],
+    "n": 45,
+    "wr": 86.7,
+    "ci": 73.7
+   }
+  ],
+  "best": {
+   "conditions": [
+    "rsi_30_45"
+   ],
+   "n": 29,
+   "wr": 100.0,
+   "ci": 88.4
+  }
+ },
+ "300548": {
+  "name": "长芯博创",
+  "rules": [
+   {
+    "conditions": [
+     "bb_low"
+    ],
+    "n": 37,
+    "wr": 91.9,
+    "ci": 78.6
+   },
+   {
+    "conditions": [
+     "ma_bear_short"
+    ],
+    "n": 40,
+    "wr": 85.0,
+    "ci": 70.8
+   },
+   {
+    "conditions": [
+     "bb_midlow"
+    ],
+    "n": 53,
+    "wr": 84.9,
+    "ci": 72.9
+   }
+  ],
+  "best": {
+   "conditions": [
+    "bb_low"
+   ],
+   "n": 37,
+   "wr": 91.9,
+   "ci": 78.6
+  }
+ },
+ "603629": {
+  "name": "利通电子",
+  "rules": [
+   {
+    "conditions": [
+     "wr_gt80"
+    ],
+    "n": 28,
+    "wr": 85.7,
+    "ci": 68.3
+   },
+   {
+    "conditions": [
+     "pos_lt40"
+    ],
+    "n": 57,
+    "wr": 82.5,
+    "ci": 70.6
+   }
+  ],
+  "best": {
+   "conditions": [
+    "wr_gt80"
+   ],
+   "n": 28,
+   "wr": 85.7,
+   "ci": 68.3
+  }
+ },
+ "300475": {
+  "name": "香农芯创",
+  "rules": [
+   {
+    "conditions": [
+     "rsi_30_45"
+    ],
+    "n": 39,
+    "wr": 84.6,
+    "ci": 70.2
+   },
+   {
+    "conditions": [
+     "ma_bear_short"
+    ],
+    "n": 37,
+    "wr": 83.8,
+    "ci": 68.7
+   },
+   {
+    "conditions": [
+     "bb_midlow"
+    ],
+    "n": 41,
+    "wr": 82.9,
+    "ci": 68.6
+   }
+  ],
+  "best": {
+   "conditions": [
+    "rsi_30_45"
+   ],
+   "n": 39,
+   "wr": 84.6,
+   "ci": 70.2
+  }
+ },
+ "600869": {
+  "name": "远东股份",
+  "rules": [
+   {
+    "conditions": [
+     "rsi_45_60"
+    ],
+    "n": 32,
+    "wr": 93.8,
+    "ci": 79.8
+   },
+   {
+    "conditions": [
+     "ma_bear_short"
+    ],
+    "n": 27,
+    "wr": 85.2,
+    "ci": 67.3
+   },
+   {
+    "conditions": [
+     "rsi_30_45"
+    ],
+    "n": 34,
+    "wr": 82.4,
+    "ci": 66.4
+   }
+  ],
+  "best": {
+   "conditions": [
+    "rsi_45_60"
+   ],
+   "n": 32,
+   "wr": 93.8,
+   "ci": 79.8
+  }
+ },
+ "002436": {
+  "name": "兴森科技",
+  "rules": [
+   {
+    "conditions": [
+     "rsi_30_45"
+    ],
+    "n": 35,
+    "wr": 88.6,
+    "ci": 73.9
+   },
+   {
+    "conditions": [
+     "ma_bear_short"
+    ],
+    "n": 34,
+    "wr": 85.3,
+    "ci": 69.7
+   },
+   {
+    "conditions": [
+     "long_upper_shadow"
+    ],
+    "n": 26,
+    "wr": 80.8,
+    "ci": 61.9
+   }
+  ],
+  "best": {
+   "conditions": [
+    "rsi_30_45"
+   ],
+   "n": 35,
+   "wr": 88.6,
+   "ci": 73.9
+  }
+ }
+}

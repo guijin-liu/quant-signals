@@ -12,6 +12,7 @@ live_watcher_err.log
 data/*
 !data/top_amount/
 !data/hot_pool/
+!data/per_stock_rules.json
 backtest/
 features/
 lib/
