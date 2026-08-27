@@ -186,6 +186,10 @@ def score_buy(code, f15, f5=None, fund=None):
                 score += 1; reasons.append("主力净流入")
             elif main5 < -1:
                 reasons.append("主力流出⚠")
+            # 2026-08-27 资金深化：超大单+大单当日双流入（回测T+1胜率76%，全场最高alpha）
+            f0 = fund[0] if fund else {}
+            if f0.get("super_net", 0) > 0 and f0.get("large_net", 0) > 0:
+                score += 1; reasons.append("超大+大单双流入")
         except Exception:
             pass
 
