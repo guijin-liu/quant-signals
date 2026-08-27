@@ -13,8 +13,39 @@ POOL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "hot
 HOT_N = 50
 
 
+def _load_history(days=5):
+    """近 days 个榜单历史 → {code: {"days": 上榜天数, "last_rank": 最近排名}}"""
+    files = sorted(glob.glob(os.path.join(POOL_DIR, "*.json")))[-days:]
+    hist = {}
+    for path in files:
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+            for s in data.get("stocks", []):
+                c = s.get("code")
+                if not c:
+                    continue
+                h = hist.setdefault(c, {"days": 0, "last_rank": 999})
+                h["days"] += 1
+                h["last_rank"] = min(h["last_rank"], s.get("rank", 999))
+        except Exception:
+            continue
+    return hist
+
+
+def _hotness(rank, hist_entry):
+    """持续热度分（2026-08-27 借鉴概念热度策略）：基础人气 + 持续上榜 + 排名趋势。越大越热。"""
+    days = hist_entry.get("days", 0) if hist_entry else 0
+    prev_rank = hist_entry.get("last_rank", 999) if hist_entry else 999
+    score = max(0, 100 - rank)          # 今日人气（排名越前分越高）
+    score += min(days, 5) * 6           # 持续上榜加分（多日热度=资金持续关注）
+    if prev_rank > rank:                # 排名上升加分（趋势向上）
+        score += 5
+    return score
+
+
 def save_today(n=HOT_N, date=None):
-    """拉当日人气前n，存 data/hot_pool/{date}.json。
+    """拉当日人气前n，存 data/hot_pool/{date}.json（含持续热度分，按热度排序）。
     降级链: 东财人气榜 → 同花顺热股榜(非东财系,2026-08-27接入) → 换手率榜(东财f8→新浪)。
     返回路径或None"""
     rows = em_client.em_fetch_hot_rank(n)
@@ -30,13 +61,17 @@ def save_today(n=HOT_N, date=None):
     if not rows:
         logger.error("人气榜+同花顺+换手率榜均失败，未保存")
         return None
-    date = date or datetime.datetime.now().strftime("%Y%m%d")
+    date = date or (datetime.datetime.utcnow() + datetime.timedelta(hours=8)).strftime("%Y%m%d")  # 北京时间
+    hist = _load_history(5)
+    for s in rows:
+        s["hotness"] = _hotness(s.get("rank", 99), hist.get(s.get("code")))
+    rows.sort(key=lambda x: -x.get("hotness", 0))  # 持续热度高的排前
     os.makedirs(POOL_DIR, exist_ok=True)
     path = os.path.join(POOL_DIR, f"{date}.json")
     with open(path, "w", encoding="utf-8") as f:
         json.dump({"date": date, "count": len(rows), "source": source, "stocks": rows},
                   f, ensure_ascii=False, indent=1)
-    logger.info(f"已保存当日热点池: {date} {len(rows)}只(source={source}) → {path}")
+    logger.info(f"已保存当日热点池: {date} {len(rows)}只(source={source},含热度分) → {path}")
     return path
 
 

@@ -176,12 +176,26 @@ def scan_once(all_stocks, rules):
                     logger.info(f"{code}{name} 命中规则但主力净流出({main_net/1e4:.0f}万)，拦截")
                     continue
                 close = float(fm["close"].iloc[-1])
+                # ── 盘中确认（借鉴概念热度策略"趋势确认入场"）：现价须高于今日开盘，防追高/假信号 ──
+                day_high = 0.0
+                try:
+                    _today = bj_now().strftime("%Y%m%d")
+                    _tr = df[df["date"].astype(str).str[:8] == _today]
+                    if not _tr.empty:
+                        day_open = float(_tr.iloc[0]["open"])
+                        day_high = float(_tr["high"].max())
+                        if close <= day_open:
+                            logger.info(f"{code}{name} 盘中确认不过（现价{close}≤开盘{day_open}），跳过")
+                            continue
+                except Exception:
+                    pass
                 results.append({
                     "code": code, "name": name, "close": round(close, 2),
                     "rule": rule, "main_net": main_net,
                     "rsi": round(float(fm["rsi"].iloc[-1]), 1),
                     "bb": round(float(fm["bb_pct"].iloc[-1]), 2),
                     "sell_pct": rule.get("sell_pct", 1.5),
+                    "day_high": round(day_high, 2),
                 })
                 break  # 一票一轮只报一条规则
         except Exception as e:
@@ -194,6 +208,12 @@ def push_signal(r, scan_time):
     rule = r["rule"]
     eval_txt = fund_eval(code, name)   # 主力资金+龙虎榜机构评估
     sell = round(r["close"] * (1 + r["sell_pct"] / 100), 2)
+    # ── 动态止盈参考（2026-08-27）：当日高点回撤1.5%（移动止盈简化）──
+    dyn_row = ""
+    if r.get("day_high"):
+        trail = round(r["day_high"] * 0.985, 2)
+        if trail > sell:
+            dyn_row = f'<tr><td>移动止盈</td><td style="color:#e74c3c">{trail}</td><td>当日高点</td><td>{r["day_high"]}</td></tr>'
     conds_txt = "+".join(rule.get("conditions", []))
     main_str = f"主力净流入 {r['main_net']/1e4:.0f}万" if r["main_net"] else "主力资金-"
     title = f"🔴{APP_NAME}买入 {name} {r['close']}"
@@ -206,6 +226,7 @@ def push_signal(r, scan_time):
                f'<tr><td>胜率</td><td>{rule.get("wr", "-")}% (n={rule.get("n", "-")})</td>'
                f'<td>{main_str}</td></tr>'
                f'<tr><td>RSI</td><td>{r["rsi"]}</td><td>BB%</td><td>{r["bb"]}</td></tr>'
+               f'{dyn_row}'
                f'<tr><td colspan="4" style="color:#8e44ad">💰 {eval_txt}</td></tr>'
                f'</table>'
                f'<p style="color:#888;font-size:11px">{scan_time} | {APP_NAME} | 当日热点池(人气前50)+85%规则+资金流</p></div>')
