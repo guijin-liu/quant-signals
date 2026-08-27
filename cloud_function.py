@@ -393,6 +393,20 @@ def main_loop():
         eh, em = map(int, env_deadline.split(":")[:2])
     deadline = bj_now().replace(hour=eh, minute=em, second=0, microsecond=0)
 
+    # ── v16.1 延迟启动兜底：已过截止但未收盘→自动续扫到15:00；已收盘→明确告警而非"全天无信号" ──
+    now = bj_now()
+    if now >= deadline:
+        if now.hour < 15:
+            logger.warning(f"启动过晚({now.strftime('%H:%M')} 已过截止{eh:02d}:{em:02d})，自动续扫到15:00收盘")
+            deadline = now.replace(hour=15, minute=0, second=0, microsecond=0)
+        else:
+            logger.warning(f"已收盘({now.strftime('%H:%M')})，本轮无法扫描")
+            push_msg(f"⚠️{APP_NAME}扫描启动过晚",
+                     f'<div style="font-size:14px;padding:10px"><h3 style="color:#e74c3c">⚠️ 扫描未执行</h3>'
+                     f'<p>任务于 {now.strftime("%m/%d %H:%M")} 才启动，已过截止 {eh:02d}:{em:02d} 且已收盘，本轮未扫描。</p>'
+                     f'<p style="color:#888">请检查GitHub Actions定时调度是否延迟。</p></div>')
+            return
+
     while bj_now() < deadline:
         state = market_state()
 

@@ -10,7 +10,7 @@ import requests
 
 import em_client
 import mx_fetcher
-from dynamic_pool import load_latest_pool
+from fixed_pool_2 import FIXED_POOL_2, FIXED_POOL_DATE
 from backtest_miner2 import compute_feature_matrix, CONDITIONS
 from fund_eval import fund_eval
 
@@ -158,7 +158,7 @@ def push_signal(r, scan_time):
                f'<tr><td>RSI</td><td>{r["rsi"]}</td><td>BB%</td><td>{r["bb"]}</td></tr>'
                f'<tr><td colspan="4" style="color:#8e44ad">💰 {eval_txt}</td></tr>'
                f'</table>'
-               f'<p style="color:#888;font-size:11px">{scan_time} | {APP_NAME} | 当日固定池(成交额前150)+85%规则+资金流</p></div>')
+               f'<p style="color:#888;font-size:11px">{scan_time} | {APP_NAME} | 固定池(成交额前70)+85%规则+资金流</p></div>')
     push_msg(title, content)
 
 
@@ -175,11 +175,8 @@ def main_loop():
         return
     logger.info(f"加载 {len(rules)} 条规则")
 
-    pool = load_latest_pool()
-    if not pool:
-        logger.error("当日池为空（data/top_amount 无榜单），退出")
-        return
-    logger.info(f"当日固定池 {len(pool)} 只")
+    pool = dict(FIXED_POOL_2)
+    logger.info(f"固定池 {len(pool)} 只 (成交额前70, 快照{FIXED_POOL_DATE})")
 
     pushed = set()
     bought_today = set()
@@ -191,6 +188,20 @@ def main_loop():
     if env_deadline and ":" in env_deadline:
         eh, em = map(int, env_deadline.split(":")[:2])
     deadline = bj_now().replace(hour=eh, minute=em, second=0, microsecond=0)
+
+    # 延迟启动兜底：已过截止但未收盘→自动续扫到15:00；已收盘→明确告警而非"今日无信号"
+    now = bj_now()
+    if now >= deadline:
+        if now.hour < 15:
+            logger.warning(f"启动过晚({now.strftime('%H:%M')} 已过截止{eh:02d}:{em:02d})，自动续扫到15:00收盘")
+            deadline = now.replace(hour=15, minute=0, second=0, microsecond=0)
+        else:
+            logger.warning(f"已收盘({now.strftime('%H:%M')})，本轮无法扫描")
+            push_msg(f"⚠️{APP_NAME}扫描启动过晚",
+                     f'<div style="font-size:14px;padding:10px"><h3 style="color:#e74c3c">⚠️ 扫描未执行</h3>'
+                     f'<p>任务于 {now.strftime("%m/%d %H:%M")} 才启动，已过截止 {eh:02d}:{em:02d} 且已收盘，本轮未扫描。</p>'
+                     f'<p style="color:#888">请检查GitHub Actions定时调度是否延迟。</p></div>')
+            return
     last_state = None
     scan_count = 0
 
@@ -250,7 +261,7 @@ def main_loop():
                  f'<div style="font-size:14px;padding:10px">{lines}<p style="color:#888">⚠️ T+1：今日买入最快明日可卖</p></div>')
     else:
         push_msg(f"☁️{APP_NAME} {end_str} 今日无信号",
-                 f'<div>当日固定池{len(pool)}只，{scan_count}轮扫描无规则命中</div>')
+                 f'<div>固定池{len(pool)}只，{scan_count}轮扫描无规则命中</div>')
 
 
 if __name__ == "__main__":
