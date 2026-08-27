@@ -1,6 +1,7 @@
 """回溯挖掘引擎 v2.0 — 腾讯日线 + 沿用v16评分框架
 逐票回溯 → 筛选≥77%胜率的评分阈值 → 计算9折卖点
 """
+import sys
 import requests
 import numpy as np
 import pandas as pd
@@ -8,6 +9,7 @@ from datetime import datetime
 from collections import defaultdict
 import json, os, time
 from stock_pool import STOCK_POOL
+import mx_fetcher
 
 UA = "Mozilla/5.0"
 POOL = STOCK_POOL  # v16.1: 直接使用股票池
@@ -98,8 +100,9 @@ def score_v16(f):
 # ═══════════════════════════════════════
 
 def backtest_stock(code, name):
-    df = fetch_daily_tencent(code)
-    if df.empty or len(df) < 120:
+    # 2026-08-27: 挖掘口径与实盘对齐 → 改用15分钟K线（原日线口径与实盘15min不匹配，胜率/卖点失真）
+    df = mx_fetcher.fetch_kline(code, '15')
+    if df.empty or len(df) < 70:
         return None, f"数据不足({len(df)}条)"
 
     close = df['close'].values; high = df['high'].values
@@ -256,7 +259,7 @@ def main():
     output = {
         'generated': datetime.now().strftime('%Y-%m-%d %H:%M'),
         'strategy': 'v16.1 — 47列全量指标共振, ≥3分买入, 金叉必须',
-        'data_source': '腾讯日线 (web.ifzq.gtimg.cn)',
+        'data_source': '腾讯15分钟 (ifzq.gtimg.cn) — 与实盘口径一致, T+1胜率, 73指标',
         'total_stocks': len(POOL),
         'win_threshold': '≥1%涨幅为胜',
         'stocks_77pct': n_77,

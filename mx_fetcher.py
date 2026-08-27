@@ -248,7 +248,7 @@ def fetch_kline(code: str, freq: str = "15") -> pd.DataFrame:
         url = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
         params = {"param": f"{pfx}{code},day,,,90,qfq"}
     else:
-        freq_map = {"5": ("m5", 240), "15": ("m15", 120), "60": ("m60", 60)}
+        freq_map = {"5": ("m5", 240), "15": ("m15", 800), "60": ("m60", 60)}  # 15min: 800根≈100交易日 (2026-08-27 扩展,原120根样本不足)
         mk, limit = freq_map.get(freq, ("m15", 120))
         url = "https://ifzq.gtimg.cn/appstock/app/kline/mkline"
         params = {"param": f"{pfx}{code},{mk},,{limit}"}
