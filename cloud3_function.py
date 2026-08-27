@@ -22,6 +22,18 @@ BEIJING_TZ = timezone(timedelta(hours=8))
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RULES_PATH = os.path.join(BASE_DIR, "rules2.json")
 
+# 逐票规则（每票规律不同；per_stock_scan.py 生成，无该票规则时退回全局 rules2）
+PER_RULES = {}
+try:
+    _pr_path = os.path.join(BASE_DIR, "data", "per_stock_rules.json")
+    if os.path.exists(_pr_path):
+        _pr = json.load(open(_pr_path, encoding="utf-8"))
+        PER_RULES = {code: [{"conditions": r["conditions"], "wr": r.get("wr", "-"),
+                             "n": r.get("n", "-"), "sell_pct": 5.0} for r in v["rules"]]
+                     for code, v in _pr.items()}
+except Exception:
+    pass
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger()
 
@@ -149,7 +161,7 @@ def scan_once(all_stocks, rules):
                 f0 = str(fund[0].get("date"))[:10]
                 fl = str(fund[-1].get("date"))[:10]
                 main_net = fund[0]["main_net"] if f0 > fl else fund[-1]["main_net"]
-            for rule in rules:
+            for rule in PER_RULES.get(code, rules):
                 conds = rule.get("conditions", [])
                 try:
                     bools = {cn: CONDITIONS[cn](fm) for cn in conds}
