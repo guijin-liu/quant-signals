@@ -583,15 +583,16 @@ def main():
     limit = None
     if "--limit" in args:
         limit = int(args[args.index("--limit") + 1])
-    pool = load_pool_window(5)
-    logger.info(f"动态池 {len(pool)}只，开始挖掘")
+    from fixed_pool_2 import FIXED_POOL_2
+    pool = dict(FIXED_POOL_2)
+    logger.info(f"2号固定池 {len(pool)}只，开始挖掘（T+1胜率+73指标）")
     result = mine(pool, limit=limit)
     rules = result["rules"]
     logger.info(f"挖掘完成: {len(rules)}条规则")
     out = {
         "generated": time.strftime("%Y-%m-%d %H:%M"),
-        "strategy": "2号: 动态池(成交额top150×5日) + 全量指标 + 主力资金流",
-        "win_def": "买入后8根15分钟K线内最高涨幅≥1%为胜",
+        "strategy": "2号: 固定池(成交额top70,快照20260827) + 73指标 + 主力资金流",
+        "win_def": "T+1: 下一交易日8根15分钟K线内最高涨幅≥1%为胜",
         "hold_bars": 8, "win_pct": 1.0, "min_n": 30, "wr_target": 85,
         "rules": rules,
     }

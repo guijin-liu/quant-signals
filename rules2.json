@@ -1,7 +1,7 @@
 {
-  "generated": "2026-08-23 02:38",
-  "strategy": "2号: 固定池(成交额top70,快照20260827) + 全量指标 + 主力资金流",
-  "win_def": "买入后8根15分钟K线内最高涨幅≥1%为胜",
+  "generated": "2026-08-27 18:42",
+  "strategy": "2号: 固定池(成交额top70,快照20260827) + 73指标 + 主力资金流",
+  "win_def": "T+1: 下一交易日8根15分钟K线内最高涨幅≥1%为胜",
   "hold_bars": 8,
   "win_pct": 1.0,
   "min_n": 30,
@@ -9,143 +9,75 @@
   "rules": [
     {
       "conditions": [
-        "fund_super_in",
-        "rsi_lt30"
+        "shooting_star",
+        "hammer",
+        "low_vol",
+        "j_lt30"
       ],
-      "n": 35,
-      "wr": 100.0,
-      "avg_gain": 6.53,
+      "n": 56,
+      "wr": 92.9,
+      "avg_gain": NaN,
       "fund_split": {
         "inflow": {
-          "n": 18,
-          "wr": 100.0
+          "n": 43,
+          "wr": 90.7
         },
         "outflow": {
-          "n": 17,
+          "n": 13,
           "wr": 100.0
         }
       },
       "fund_required": false,
-      "sell_pct": 5.9,
+      "sell_pct": 1.0,
       "id": "R001"
     },
     {
       "conditions": [
-        "fund_super_in",
-        "bb_low",
-        "adx_gt25",
-        "j_lt30"
+        "shooting_star",
+        "long_lower_shadow",
+        "hammer",
+        "low_vol"
       ],
-      "n": 39,
-      "wr": 100.0,
-      "avg_gain": 7.01,
+      "n": 110,
+      "wr": 90.9,
+      "avg_gain": NaN,
       "fund_split": {
         "inflow": {
-          "n": 14,
-          "wr": 100.0
+          "n": 97,
+          "wr": 89.7
         },
         "outflow": {
-          "n": 25,
+          "n": 13,
           "wr": 100.0
         }
       },
       "fund_required": false,
-      "sell_pct": 6.3,
-      "id": "R002"
-    },
-    {
-      "conditions": [
-        "rsi_lt30",
-        "wr_lt20",
-        "bb_midlow"
-      ],
-      "n": 36,
-      "wr": 100.0,
-      "avg_gain": 8.96,
-      "fund_split": {
-        "inflow": {
-          "n": 0,
-          "wr": null
-        },
-        "outflow": {
-          "n": 36,
-          "wr": 100.0
-        }
-      },
-      "fund_required": false,
-      "sell_pct": 8.1,
+      "sell_pct": 1.0,
       "id": "R003"
     },
     {
       "conditions": [
-        "j_lt30",
-        "wr_lt20",
-        "bb_midlow"
+        "shooting_star",
+        "doji",
+        "hammer",
+        "low_vol"
       ],
-      "n": 32,
-      "wr": 100.0,
-      "avg_gain": 8.89,
+      "n": 110,
+      "wr": 90.9,
+      "avg_gain": NaN,
       "fund_split": {
         "inflow": {
-          "n": 0,
-          "wr": null
+          "n": 97,
+          "wr": 89.7
         },
         "outflow": {
-          "n": 32,
+          "n": 13,
           "wr": 100.0
         }
       },
       "fund_required": false,
-      "sell_pct": 8.0,
+      "sell_pct": 1.0,
       "id": "R004"
-    },
-    {
-      "conditions": [
-        "fund_in",
-        "pos_lt40",
-        "adx_gt25",
-        "fund_super_in"
-      ],
-      "n": 49,
-      "wr": 98.0,
-      "avg_gain": 5.23,
-      "fund_split": {
-        "inflow": {
-          "n": 49,
-          "wr": 98.0
-        },
-        "outflow": {
-          "n": 0,
-          "wr": null
-        }
-      },
-      "fund_required": false,
-      "sell_pct": 4.7,
-      "id": "R005"
-    },
-    {
-      "conditions": [
-        "fund_strong",
-        "pos_lt40",
-        "adx_gt25",
-        "fund_super_in"
-      ],
-      "n": 49,
-      "wr": 98.0,
-      "avg_gain": 5.23,
-      "fund_split": {
-        "inflow": {
-          "n": 49,
-          "wr": 98.0
-        },
-        "outflow": {
-          "n": 0,
-          "wr": null
-        }
-      },
-      "fund_required": false,
-      "sell_pct": 4.7,
-      "id": "R006"
     }
   ]
 }
