@@ -158,10 +158,84 @@ def compute_features(df):
 
 
 # ═══════════════════════════════════════
+# 全指标广度评分（2026-08-27：1号决策参考全部~95条件）
+# ═══════════════════════════════════════
+
+# 多头条件（命中+1分）
+BULL_CONDS = {"golden","ma_bull","ma_bull_short","macd_golden","kdj_golden","ema_golden",
+    "ma5_cross_ma20","ma10_cross_ma20","ma20_cross_ma60","ma_slope_up","ma20_slope_up",
+    "macd_hist_gt0","macd_hist_up","above_ma20","above_ma60","pdi_gt_mdi","adx_gt25",
+    "roc_gt0","psy_gt50","obv_up","vol_break","vol_up","price_up_vol_up","vol_up_price_up",
+    "high_break","consec_up2","hammer","long_lower_shadow","engulfing_bull","bull_harami",
+    "red_three","morning_star","doji","ma20_support","ma20_reclaim","close_near_ma20",
+    "bb_squeeze_break","vol_surge_long","gap_up","rsi_bull_div","macd_bull_div",
+    "fund_in","fund_super_in","fund_large_in","fund_strong","fund_large_strong",
+    "fund_super_strong","fund_5d_pos","fund_super_5d_pos","fund_large_5d_pos",
+    "fund_super_large_in","fund_in_price_dn"}
+# 空头条件（命中-1分）
+BEAR_CONDS = {"ma_bear_full","ma_bear_short","engulfing_bear","evening_star",
+    "three_black_crows","gap_down","consec_down2","rsi_gt70","k_gt80","wr_gt80",
+    "cci_gt100","pos_gt80","low_break","vol_bear_div","vol_shrink_pullback"}
+
+def build_full_matrix(df, code, name, funds=None):
+    """完整特征矩阵：技术指标(~95条件) + 资金流按日对齐 + 资金深化特征（与2/3号同引擎）"""
+    from backtest_miner2 import compute_feature_matrix, add_fund_features
+    if df.empty or len(df) < 70:
+        return None
+    fm = compute_feature_matrix(df['close'].values, df['high'].values,
+                                df['low'].values, df['volume'].values, df['open'].values)
+    if fm.empty:
+        return None
+    if funds is None:
+        funds = _get_funds({code: name})
+    rows = funds.get(code) or []
+    fund_by_date = {}
+    for d in rows:
+        fd = str(d.get("date"))[:10]
+        if len(fd) == 8 and "-" not in fd:
+            fd = f"{fd[:4]}-{fd[4:6]}-{fd[6:8]}"
+        fund_by_date[fd] = d
+
+    def _norm(d):
+        s = str(d)[:10]
+        if len(s) == 8 and "-" not in s:
+            s = f"{s[:4]}-{s[4:6]}-{s[6:8]}"
+        return s
+    dates = [_norm(d) for d in df["date"].tolist()]
+    fm["main_net"] = np.array([fund_by_date.get(d, {}).get("main_net", 0) for d in dates])
+    fm["super_net"] = np.array([fund_by_date.get(d, {}).get("super_net", 0) for d in dates])
+    fm["large_net"] = np.array([fund_by_date.get(d, {}).get("large_net", 0) for d in dates])
+    if "amount_mean" not in fm.columns:  # 腾讯K线无成交额列，用 close*volume*100(手) 估算
+        est = df["close"].values * df["volume"].values * 100
+        fm["amount_mean"] = pd.Series(est).rolling(20, min_periods=1).mean().values
+    fm = add_fund_features(fm, df["close"].values, df["volume"].values)
+    return fm
+
+def score_breadth(fm):
+    """遍历全部~95条件，多头命中+1、空头命中-1，返回 {score, bull, bear}"""
+    from backtest_miner2 import CONDITIONS
+    if fm is None or fm.empty:
+        return {"score": 0, "bull": [], "bear": []}
+    bull = []; bear = []
+    for cn, cond in CONDITIONS.items():
+        try:
+            hit = bool(cond(fm).iloc[-1])
+        except Exception:
+            continue
+        if not hit:
+            continue
+        if cn in BULL_CONDS:
+            bull.append(cn)
+        elif cn in BEAR_CONDS:
+            bear.append(cn)
+    return {"score": len(bull) - len(bear), "bull": bull, "bear": bear}
+
+
+# ═══════════════════════════════════════
 # 买卖点评分
 # ═══════════════════════════════════════
 
-def score_buy(code, f15, f5=None, fund=None):
+def score_buy(code, f15, f5=None, fund=None, breadth=None):
     if not f15: return False, "", 0, 0
     close = f15['close']; score = 0; reasons = []
     if f15['golden']: score += 2; reasons.append("金叉")
@@ -176,6 +250,14 @@ def score_buy(code, f15, f5=None, fund=None):
     if f15['obv_up']: score += 1; reasons.append("OBV向上")
     if f15['above_ma60']: score += 1; reasons.append("多头趋势")
     if f5 and f5.get('golden'): score += 1; reasons.append("5min确认")
+
+    # 2026-08-27 全指标广度评分（~95条件）：多头命中加分、空头命中减分，并入总分（封顶±5防失衡）
+    if breadth:
+        b = breadth.get("score", 0); nb = len(breadth.get("bull", [])); nbr = len(breadth.get("bear", []))
+        b = max(-5, min(5, b))
+        score += b
+        if b > 0: reasons.append(f"广度+{b}({nb}多/{nbr}空)")
+        elif b < 0: reasons.append(f"广度{b}({nb}多/{nbr}空)⚠")
 
     # v16.1 资金流考量（重要指标）：主力净流入为正是加分项
     # 研究结论: 主力流入时胜率全面高3~8pp，超大单最强（2号已用资金拦截）
@@ -265,13 +347,17 @@ def scan_once(all_stocks):
 
         df15 = mx_fetcher.fetch_kline(code, '15')
         if df15.empty or len(df15) < 26: continue
-        f15 = compute_features(df15)
-        if not f15: continue
+        fm15 = build_full_matrix(df15, code, name, funds)
+        if fm15 is None: continue
+        f15 = fm15.iloc[-1].to_dict()
+        f15['macd'] = float(f15.get('macd_hist', 0))          # 兼容1号字段名
+        f15['macd_direction'] = 'up' if f15['macd'] > 0 else 'down'
 
         df5 = mx_fetcher.fetch_kline(code, '5')
         f5 = compute_features(df5) if (not df5.empty and len(df5) >= 26) else None
 
-        buy, reason_b, target, gain_pct = score_buy(code, f15, f5, funds.get(code))
+        breadth = score_breadth(fm15)
+        buy, reason_b, target, gain_pct = score_buy(code, f15, f5, funds.get(code), breadth)
         sell, reason_s = score_sell(f15, gain_pct)
         sig = "BUY" if buy else ("SELL" if sell else "HOLD")
         reason = reason_b if buy else (reason_s if sell else "")
