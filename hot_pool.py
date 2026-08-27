@@ -14,18 +14,25 @@ HOT_N = 50
 
 
 def save_today(n=HOT_N, date=None):
-    """拉当日人气前n，存 data/hot_pool/{date}.json。东财挂→换手率榜降级。返回路径或None"""
+    """拉当日人气前n，存 data/hot_pool/{date}.json。
+    降级链: 东财人气榜 → 同花顺热股榜(非东财系,2026-08-27接入) → 换手率榜(东财f8→新浪)。
+    返回路径或None"""
     rows = em_client.em_fetch_hot_rank(n)
+    source = "hot_rank"
     if not rows:
-        logger.warning("人气榜失败，降级换手率榜(热度代理)")
+        logger.warning("东财人气榜失败 → 同花顺热股榜兜底(非东财系)")
+        rows = em_client.em_fetch_hot_rank_ths(n)
+        source = "ths_hot"
+    if not rows:
+        logger.warning("同花顺也失败 → 换手率榜降级(热度代理)")
         rows = em_client.em_fetch_hot_rank_fallback(n)
+        source = "turnover"
     if not rows:
-        logger.error("人气榜+换手率榜均失败，未保存")
+        logger.error("人气榜+同花顺+换手率榜均失败，未保存")
         return None
     date = date or datetime.datetime.now().strftime("%Y%m%d")
     os.makedirs(POOL_DIR, exist_ok=True)
     path = os.path.join(POOL_DIR, f"{date}.json")
-    source = "hot_rank" if rows[0].get("rank") else "turnover"
     with open(path, "w", encoding="utf-8") as f:
         json.dump({"date": date, "count": len(rows), "source": source, "stocks": rows},
                   f, ensure_ascii=False, indent=1)
