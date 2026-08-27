@@ -104,6 +104,9 @@ def backtest_stock(code, name):
 
     close = df['close'].values; high = df['high'].values
     low = df['low'].values; vol = df['volume'].values
+    dates = [str(d)[:10] for d in df['date'].tolist()]
+    if dates and len(dates[0]) == 8 and "-" not in dates[0]:
+        dates = [f"{d[:4]}-{d[4:6]}-{d[6:8]}" for d in dates]
 
     # 收集所有 ≥3分信号（与实盘 score_buy 一致：≥3分触发，≥4分=强，不区分具体分数）
     all_signals = []
@@ -114,7 +117,13 @@ def backtest_stock(code, name):
         s, reasons = score_v16(f)
         if s < 3: continue  # v16原版阈值
         entry = close[i]
-        forward_high = high[i+1:i+21]
+        # T+1 修正 (2026-08-27)：次日才能卖 → 从下一交易日第一根bar起算，跳过当天剩余bar
+        j = i + 1
+        while j < len(df) and dates[j] == dates[i]:
+            j += 1
+        if j >= len(df):
+            continue
+        forward_high = high[j:j+20]
         max_gain = (np.max(forward_high) - entry) / entry * 100
         all_signals.append({
             'date': str(df['date'].iloc[i])[:10],

@@ -27,6 +27,7 @@ jobs:
       - name: 3号下午盘扫描（13:10→15:00）
         env:
           MX_APIKEY: ${{ secrets.MX_APIKEY }}
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
           SCAN_DEADLINE: "15:00"
         run: python cloud3_function.py
 
