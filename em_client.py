@@ -358,6 +358,23 @@ def em_fetch_hot_rank_fallback(n=50) -> list:
     return em_fetch_top_amount_turnover(n, src="sina")
 
 
+def em_fetch_hot_rank_ths(n=50) -> list:
+    """同花顺热股榜前n（非东财系备用多源，2026-08-27 验证可用，未接入实盘）。
+    返回 [{code,name,rank}]，结构兼容 hot_pool。东财人气榜被风控/失效时可切此源。"""
+    url = "https://dq.10jqka.com.cn/fuyao/hot_list_data/out/hot_list/v1/stock"
+    params = {"stock_type": "a", "type": "day", "list_type": "normal"}
+    headers = {"User-Agent": UA, "Referer": "https://www.10jqka.com.cn/"}
+    try:
+        r = requests.get(url, params=params, headers=headers, timeout=15)
+        lst = (r.json().get("data") or {}).get("stock_list") or []
+        rows = [{"code": x.get("code", ""), "name": x.get("name", ""), "rank": i + 1}
+                for i, x in enumerate(lst) if x.get("code")][:n]
+        return rows
+    except Exception as e:
+        logger.error(f"hot_rank_ths: {e}")
+        return []
+
+
 def em_fetch_top_amount_turnover(n=50, src="em") -> list:
     """换手率前n → [{code,name,amount,turnover}]。src=em(东财f8) / sina(新浪turnoverratio)"""
     if src == "em":
