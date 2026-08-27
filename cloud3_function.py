@@ -229,6 +229,23 @@ def main_loop():
     if not pool:
         logger.error("热点池为空（data/hot_pool 无榜单），退出")
         return
+    # ── 动态池新鲜度检查（3号唯一动态池，防 update-hot-pool 连续失败）──
+    try:
+        _hp = sorted(os.listdir(os.path.join(BASE_DIR, "data", "hot_pool")))
+        if _hp:
+            _latest_date = os.path.basename(_hp[-1])[:8]
+            _d_latest = datetime.strptime(_latest_date, "%Y%m%d")
+            _d_now = bj_now().replace(tzinfo=None)
+            _days = (_d_now - _d_latest).days
+            if _days > 7:
+                push_msg(f"⚠️{APP_NAME}热点池过旧",
+                         f'<div style="font-size:14px;padding:10px"><h3 style="color:#e74c3c">⚠️ 热点池过旧</h3>'
+                         f'<p>最新热点池日期 <b>{_latest_date}</b>，距今 {_days} 天，可能是 update-hot-pool 连续失败。</p>'
+                         f'<p style="color:#888">请检查 GitHub Actions 的 update-hot-pool 运行状态。</p></div>')
+            else:
+                logger.info(f"热点池新鲜度 OK（{_latest_date}，{_days}天前）")
+    except Exception as e:
+        logger.warning(f"热点池新鲜度检查异常: {e}")
     logger.info(f"当日热点池 {len(pool)} 只")
 
     pushed = set()

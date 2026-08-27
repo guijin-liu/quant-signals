@@ -44,8 +44,9 @@ jobs:
           if files:
               d = json.load(open(files[-1], encoding="utf-8"))
               cnt = d.get("count", 0)
-              print("热点池 " + os.path.basename(files[-1]) + ": " + str(cnt) + "只")
-              if cnt < 50:
-                  body = json.dumps({"token":"f3fb5c092ba34785b6857bb45d23d4fa","title":"⚠️ 3号热点池不完整","content":"<div>最新热点池仅" + str(cnt) + "只，不足50，请检查</div>","template":"html"}).encode()
+              src = d.get("source", "?")
+              print("热点池 " + os.path.basename(files[-1]) + ": " + str(cnt) + "只 source=" + src)
+              if cnt < 50 or src != "hot_rank":
+                  body = json.dumps({"token":"f3fb5c092ba34785b6857bb45d23d4fa","title":"⚠️ 3号热点池异常","content":"<div>最新热点池 " + str(cnt) + "只 source=" + src + "，异常请检查（降级=人气榜可能被风控）</div>","template":"html"}).encode()
                   urllib.request.urlopen("http://www.pushplus.plus/send", body, timeout=10)
           '
