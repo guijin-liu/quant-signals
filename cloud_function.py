@@ -148,7 +148,7 @@ def compute_features(df):
         return None
     from backtest_miner2 import compute_feature_matrix
     fm = compute_feature_matrix(df['close'].values, df['high'].values,
-                                df['low'].values, df['volume'].values)
+                                df['low'].values, df['volume'].values, df['open'].values)
     if fm.empty:
         return None
     f = fm.iloc[-1].to_dict()

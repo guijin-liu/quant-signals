@@ -108,12 +108,15 @@ def _psy(close, n=12):
 # 2. 全量指标矩阵（每票一段K线 → DataFrame，一行一根bar）
 # ═══════════════════════════════════════════════
 
-def compute_feature_matrix(close, high, low, vol):
-    """返回 DataFrame(一根bar一行)。含 40+ 列指标 + 资金流列(由 fund 参数合并)。"""
+def compute_feature_matrix(close, high, low, vol, open=None):
+    """返回 DataFrame(一根bar一行)。含 40+ 列指标 + 均线扩展 + K线形态 + 资金流列(由 fund 参数合并)。"""
     close = np.asarray(close, dtype=float)
     high = np.asarray(high, dtype=float)
     low = np.asarray(low, dtype=float)
     vol = np.asarray(vol, dtype=float)
+    if open is None:
+        open = close
+    open = np.asarray(open, dtype=float)
     n = len(close)
     if n < 70:
         return pd.DataFrame()
@@ -176,6 +179,63 @@ def compute_feature_matrix(close, high, low, vol):
     # 波动收缩
     f["volatility"] = pd.Series(close).pct_change().rolling(20, min_periods=1).std()
 
+    # ── 均线扩展（2026-08-27 深挖新增）──
+    f["close_above_ma5"] = close > f["ma5"]
+    f["close_above_ma10"] = close > f["ma10"]
+    f["ma5_gt_ma20"] = f["ma5"] > f["ma20"]
+    f["ma10_gt_ma20"] = f["ma10"] > f["ma20"]
+    f["ma5_cross_ma20"] = (f["ma5"] > f["ma20"]) & (f["ma5"].shift(1) <= f["ma20"].shift(1))
+    f["ma10_cross_ma20"] = (f["ma10"] > f["ma20"]) & (f["ma10"].shift(1) <= f["ma20"].shift(1))
+    f["ma20_cross_ma60"] = (f["ma20"] > f["ma60"]) & (f["ma20"].shift(1) <= f["ma60"].shift(1))
+    f["ma_slope_up"] = f["ma5"] > f["ma5"].shift(1)
+    f["ma_bull_short"] = (f["ma5"] > f["ma10"]) & (f["ma10"] > f["ma20"])
+    f["ma_bear_short"] = (f["ma5"] < f["ma10"]) & (f["ma10"] < f["ma20"])
+
+    # ── K线形态（需要 open，2026-08-27 深挖新增）──
+    o = pd.Series(open); c = pd.Series(close); h = pd.Series(high); l = pd.Series(low)
+    rng = (h - l).clip(lower=1e-9)
+    body = (c - o).abs()
+    oc_max = pd.concat([o, c], axis=1).max(axis=1)
+    oc_min = pd.concat([o, c], axis=1).min(axis=1)
+    upper = h - oc_max
+    lower = oc_min - l
+    f["doji"] = (body / rng < 0.1).values
+    f["hammer"] = ((lower >= 2 * body) & (upper <= body) & (c >= o)).values
+    f["long_lower_shadow"] = (lower >= 2 * body).values
+    f["engulfing_bull"] = ((c > o) & (c.shift(1) < o.shift(1)) & (c >= o.shift(1)) & (o <= c.shift(1))).values
+    f["engulfing_bear"] = ((c < o) & (c.shift(1) > o.shift(1)) & (c <= o.shift(1)) & (o >= c.shift(1))).values
+    f["bull_harami"] = ((o > c) & (o.shift(1) < c.shift(1)) & (o <= c.shift(1)) & (c >= o.shift(1))).values
+    f["red_three"] = ((c > o) & (c.shift(1) > o.shift(1)) & (c.shift(2) > o.shift(2)) & (c > c.shift(1)) & (c.shift(1) > c.shift(2))).values
+    f["morning_star"] = ((c.shift(2) < o.shift(2)) & ((body / rng).shift(1) < 0.3) & (c > o) & (c > (o.shift(2) + c.shift(2)) / 2)).values
+
+    # ── 极端超卖超买（2026-08-27 深挖扩展）──
+    f["rsi_lt20"] = f["rsi"] < 20
+    f["rsi_gt70"] = f["rsi"] > 70
+    f["k_gt80"] = f["k"] > 80
+    f["d_lt20"] = f["d"] < 20
+    f["wr_gt80"] = f["wr"] > 80
+    f["cci_lt_m200"] = f["cci"] < -200
+    f["bias12_lt_m5"] = f["bias12"] < -5
+    f["pos_gt80"] = f["pos"] > 0.80
+    # ── 量价配合 ──
+    f["price_up_vol_up"] = (c.diff() > 0) & (f["vol_trend"] > 1.0)
+    f["low_vol"] = f["vol_ratio"] < 0.5
+    f["vol_up_price_up"] = (c.diff() > 0) & (f["vol_break"])
+    # ── 均线补全 ──
+    f["ma_bear_full"] = (f["ma5"] < f["ma10"]) & (f["ma10"] < f["ma20"]) & (f["ma20"] < f["ma60"])
+    f["ema_golden"] = (f["ema12"] > f["ema26"]) & (f["ema12"].shift(1) <= f["ema26"].shift(1))
+    f["ma20_slope_up"] = f["ma20"] > f["ma20"].shift(1)
+    f["macd_hist_gt0"] = f["macd_hist"] > 0
+    f["macd_hist_up"] = f["macd_hist"] > f["macd_hist"].shift(1)
+    # ── 形态补充 ──
+    f["evening_star"] = ((c.shift(2) > o.shift(2)) & ((body / rng).shift(1) < 0.3) & (c < o) & (c < (o.shift(2) + c.shift(2)) / 2)).values
+    f["three_black_crows"] = ((c < o) & (c.shift(1) < o.shift(1)) & (c.shift(2) < o.shift(2)) & (c < c.shift(1)) & (c.shift(1) < c.shift(2))).values
+    f["shooting_star"] = ((upper >= 2 * body) & (lower <= body) & (c <= o)).values
+    f["long_upper_shadow"] = (upper >= 2 * body).values
+    f["gap_up"] = (l > h.shift(1)).values
+    f["gap_down"] = (h < l.shift(1)).values
+    f["low_break"] = close < pd.Series(low).rolling(20, min_periods=1).min().shift(1)
+
     # 资金流列占位（由 backtest_stock2 合并）
     f["main_net"] = 0.0
     f["super_net"] = 0.0
@@ -223,6 +283,53 @@ CONDITIONS = {
     "fund_super_in":_mk_cond(lambda f: f["super_net"] > 0),
     "fund_large_in":_mk_cond(lambda f: f["large_net"] > 0),
     "fund_strong":  _mk_cond(lambda f: f["main_net"] > f["amount_mean"] * 0.02),
+    # ── 均线扩展（2026-08-27 深挖新增）──
+    "close_above_ma5":  _mk_cond(lambda f: f["close_above_ma5"]),
+    "close_above_ma10": _mk_cond(lambda f: f["close_above_ma10"]),
+    "ma5_gt_ma20":      _mk_cond(lambda f: f["ma5_gt_ma20"]),
+    "ma10_gt_ma20":     _mk_cond(lambda f: f["ma10_gt_ma20"]),
+    "ma5_cross_ma20":   _mk_cond(lambda f: f["ma5_cross_ma20"]),
+    "ma10_cross_ma20":  _mk_cond(lambda f: f["ma10_cross_ma20"]),
+    "ma20_cross_ma60":  _mk_cond(lambda f: f["ma20_cross_ma60"]),
+    "ma_slope_up":      _mk_cond(lambda f: f["ma_slope_up"]),
+    "ma_bull_short":    _mk_cond(lambda f: f["ma_bull_short"]),
+    "ma_bear_short":    _mk_cond(lambda f: f["ma_bear_short"]),
+    # ── K线形态（2026-08-27 深挖新增）──
+    "doji":             _mk_cond(lambda f: f["doji"]),
+    "hammer":           _mk_cond(lambda f: f["hammer"]),
+    "long_lower_shadow": _mk_cond(lambda f: f["long_lower_shadow"]),
+    "engulfing_bull":   _mk_cond(lambda f: f["engulfing_bull"]),
+    "engulfing_bear":   _mk_cond(lambda f: f["engulfing_bear"]),
+    "bull_harami":      _mk_cond(lambda f: f["bull_harami"]),
+    "red_three":        _mk_cond(lambda f: f["red_three"]),
+    "morning_star":     _mk_cond(lambda f: f["morning_star"]),
+    # ── 极端超卖超买（2026-08-27 扩展）──
+    "rsi_lt20":        _mk_cond(lambda f: f["rsi_lt20"]),
+    "rsi_gt70":        _mk_cond(lambda f: f["rsi_gt70"]),
+    "k_gt80":          _mk_cond(lambda f: f["k_gt80"]),
+    "d_lt20":          _mk_cond(lambda f: f["d_lt20"]),
+    "wr_gt80":         _mk_cond(lambda f: f["wr_gt80"]),
+    "cci_lt_m200":     _mk_cond(lambda f: f["cci_lt_m200"]),
+    "bias12_lt_m5":    _mk_cond(lambda f: f["bias12_lt_m5"]),
+    "pos_gt80":        _mk_cond(lambda f: f["pos_gt80"]),
+    # ── 量价配合 ──
+    "price_up_vol_up": _mk_cond(lambda f: f["price_up_vol_up"]),
+    "low_vol":         _mk_cond(lambda f: f["low_vol"]),
+    "vol_up_price_up": _mk_cond(lambda f: f["vol_up_price_up"]),
+    # ── 均线补全 ──
+    "ma_bear_full":    _mk_cond(lambda f: f["ma_bear_full"]),
+    "ema_golden":      _mk_cond(lambda f: f["ema_golden"]),
+    "ma20_slope_up":   _mk_cond(lambda f: f["ma20_slope_up"]),
+    "macd_hist_gt0":   _mk_cond(lambda f: f["macd_hist_gt0"]),
+    "macd_hist_up":    _mk_cond(lambda f: f["macd_hist_up"]),
+    # ── 形态补充 ──
+    "evening_star":    _mk_cond(lambda f: f["evening_star"]),
+    "three_black_crows": _mk_cond(lambda f: f["three_black_crows"]),
+    "shooting_star":   _mk_cond(lambda f: f["shooting_star"]),
+    "long_upper_shadow": _mk_cond(lambda f: f["long_upper_shadow"]),
+    "gap_up":          _mk_cond(lambda f: f["gap_up"]),
+    "gap_down":        _mk_cond(lambda f: f["gap_down"]),
+    "low_break":       _mk_cond(lambda f: f["low_break"]),
 }
 
 
@@ -230,14 +337,30 @@ CONDITIONS = {
 # 4. 胜率标签（未来 hold_bars 根内最高涨幅 ≥ win_pct% 为胜）
 # ═══════════════════════════════════════════════
 
-def label_wins(high, close, hold_bars=8, win_pct=1.0):
-    """返回 (win1, win2, fwd_gain)：1%胜、2%胜标签 及 未来最大涨幅%"""
+def label_wins(high, close, date=None, hold_bars=8, win_pct=1.0):
+    """返回 (win1, win2, fwd_gain)：1%胜、2%胜标签 及 未来最大涨幅%
+    T+1 修正 (2026-08-27)：A股当日买入次日才能卖 → 未来窗口从【下一交易日第一根bar】起算，
+    当天剩余bar的涨幅不计入（否则回测胜率偏乐观）。
+    date: 每bar日期列表（腾讯"20260827"/东财"2026-08-27"均兼容）；None 时退回旧逻辑(下一根bar起)。"""
     n = len(high)
     h = np.asarray(high, dtype=float)
     c = np.asarray(close, dtype=float)
     fh = np.full(n, np.nan)
-    for i in range(n - hold_bars):
-        fh[i] = h[i+1:i+1+hold_bars].max()
+    if date is None:
+        for i in range(n - hold_bars):
+            fh[i] = h[i+1:i+1+hold_bars].max()
+    else:
+        dates = [str(d)[:10] for d in date]
+        if dates and len(dates[0]) == 8 and "-" not in dates[0]:
+            dates = [f"{d[:4]}-{d[4:6]}-{d[6:8]}" for d in dates]
+        for i in range(n):
+            j = i + 1
+            while j < n and dates[j] == dates[i]:  # 跳过当天剩余bar（T+1）
+                j += 1
+            if j >= n:
+                continue
+            end = min(j + hold_bars, n)
+            fh[i] = h[j:end].max()
     gain = (fh / c - 1) * 100
     win1 = pd.Series(gain >= win_pct, index=range(n)).fillna(False)
     win2 = pd.Series(gain >= 2.0, index=range(n)).fillna(False)
@@ -265,7 +388,7 @@ def backtest_stock2(code, name="", hold_bars=8, win_pct=1.0, start="20260101"):
     fund_by_date = {r["date"]: r for r in fund}
 
     f = compute_feature_matrix(df["close"].values, df["high"].values,
-                               df["low"].values, df["volume"].values)
+                               df["low"].values, df["volume"].values, df["open"].values)
     if f.empty:
         return None
     # 资金流按交易日对齐到15min bar（bar日期取 date[:10]）
@@ -285,7 +408,7 @@ def backtest_stock2(code, name="", hold_bars=8, win_pct=1.0, start="20260101"):
     f["large_net"] = large_net
     f["amount_mean"] = np.where(amount_mean > 0, amount_mean, 1.0)
 
-    win1, win2, gain = label_wins(df["high"].values, df["close"].values, hold_bars, win_pct)
+    win1, win2, gain = label_wins(df["high"].values, df["close"].values, df["date"].tolist(), hold_bars, win_pct)
     return f, win1, win2, gain
 
 

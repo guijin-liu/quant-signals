@@ -113,7 +113,7 @@ def scan_once(all_stocks, rules):
             if df.empty or len(df) < 70:
                 continue
             fm = compute_feature_matrix(df["close"].values, df["high"].values,
-                                        df["low"].values, df["volume"].values)
+                                        df["low"].values, df["volume"].values, df["open"].values)
             if fm.empty:
                 continue
             # ── 真实资金流覆盖（妙想优先 → 新浪兜底，非东财系）──
