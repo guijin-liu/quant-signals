@@ -13,7 +13,7 @@ import numpy as np
 from scipy.stats import beta
 import mx_fetcher
 from fixed_pool_2 import FIXED_POOL_2
-from backtest_miner2 import compute_feature_matrix, CONDITIONS, label_wins
+from backtest_miner2 import compute_feature_matrix, CONDITIONS, label_wins, add_fund_features
 
 logging.basicConfig(level=logging.WARNING)
 BASE = os.path.dirname(os.path.abspath(__file__))
@@ -34,6 +34,7 @@ def scan_pool(pool):
                 continue
             fm = compute_feature_matrix(df['close'].values, df['high'].values,
                                         df['low'].values, df['volume'].values, df['open'].values)
+            fm = add_fund_features(fm, df['close'].values, df['volume'].values)
             if fm.empty:
                 continue
             win1, _, _ = label_wins(df['high'].values, df['close'].values, df['date'].tolist())

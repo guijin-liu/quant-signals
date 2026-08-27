@@ -236,11 +236,59 @@ def compute_feature_matrix(close, high, low, vol, open=None):
     f["gap_down"] = (h < l.shift(1)).values
     f["low_break"] = close < pd.Series(low).rolling(20, min_periods=1).min().shift(1)
 
+    # ── 背离类（2026-08-27 补全）──
+    f["rsi_bull_div"] = ((f["close"] < f["close"].shift(5)) & (f["rsi"] > f["rsi"].shift(5)) & (f["rsi"] < 40)).values  # RSI底背离
+    f["macd_bull_div"] = ((f["close"] < f["close"].shift(5)) & (f["macd_hist"] > f["macd_hist"].shift(5)) & (f["macd_hist"] < 0)).values  # MACD柱底背离
+    f["vol_bear_div"] = ((f["close"] > f["close"].shift(5)) & (f["vol_ratio"] < f["vol_ratio"].shift(5))).values  # 量价背离(价升量缩)
+
+    # ── 波动结构 ──
+    atr20 = pd.Series(f["atr"]).rolling(20, min_periods=1).mean()
+    bw20 = pd.Series(f["bb_width"]).rolling(20, min_periods=1).mean()
+    vol20 = pd.Series(f["volatility"]).rolling(20, min_periods=1).mean()
+    f["atr_squeeze"] = (f["atr"] < atr20 * 0.7).values          # ATR收缩
+    f["bb_squeeze"] = (f["bb_width"] < bw20 * 0.8).values        # 布林带宽收窄
+    f["bb_squeeze_break"] = (f["bb_squeeze"] & (f["close"] > f["ma20"])).values  # 收窄后站上MA20(突破)
+    f["vol_expand"] = (f["volatility"] > vol20 * 1.3).values     # 波动扩张
+
+    # ── 均线深化（葛兰碧）──
+    _dist20 = (f["close"] - f["ma20"]) / (f["ma20"] + 1e-9)
+    f["ma20_support"] = ((f["close"] >= f["ma20"]) & (_dist20.abs() < 0.02)).values   # 回踩MA20不破
+    f["ma20_reclaim"] = ((f["close"] > f["ma20"]) & (f["close"].shift(1) <= f["ma20"].shift(1))).values  # 收复MA20
+    f["close_near_ma20"] = (_dist20.abs() < 0.02).values          # 贴近MA20
+
+    # ── 连阴/连续形态 ──
+    dn = pd.Series(close).diff() < 0
+    grp_dn = (~dn).cumsum()
+    f["consec_down"] = dn.groupby(grp_dn).cumsum().values
+    f["consec_down2"] = (f["consec_down"] >= 2).values
+    body_pct = (pd.Series(close) - pd.Series(open)).abs() / (pd.Series(open) + 1e-9)
+    f["vol_surge_long"] = ((body_pct > 0.015) & (pd.Series(close) > pd.Series(open)) & (f["vol_ratio"] > 1.5)).values  # 放量长阳
+    f["vol_shrink_pullback"] = (dn & (f["vol_ratio"] < 0.8)).values  # 缩量回调
+
     # 资金流列占位（由 backtest_stock2 合并）
     f["main_net"] = 0.0
     f["super_net"] = 0.0
     f["large_net"] = 0.0
     return f
+
+
+def add_fund_features(fm, close, vol):
+    """资金流衍生特征（2026-08-27 大单/资金深化，必须在真实资金列覆盖后调用）。
+    依赖 fm 已有 main_net/super_net/large_net（真实值）"""
+    amt = pd.Series(close) * pd.Series(vol) * 100 + 1e-9  # 成交额估算（手→股）
+    fm["large_net_pct"] = fm["large_net"] / amt.values
+    fm["super_net_pct"] = fm["super_net"] / amt.values
+    fm["fund_large_strong"] = (fm["large_net_pct"] > 0.01).values       # 大单净流入>成交额1%
+    fm["fund_super_strong"] = (fm["super_net_pct"] > 0.01).values       # 超大单净流入>成交额1%
+    fm["main_net_5d"] = fm["main_net"].rolling(5, min_periods=1).sum().values
+    fm["super_net_5d"] = fm["super_net"].rolling(5, min_periods=1).sum().values
+    fm["large_net_5d"] = fm["large_net"].rolling(5, min_periods=1).sum().values
+    fm["fund_5d_pos"] = (fm["main_net_5d"] > 0).values                  # 5日主力累计为正
+    fm["fund_super_5d_pos"] = (fm["super_net_5d"] > 0).values           # 5日超大单累计为正
+    fm["fund_large_5d_pos"] = (fm["large_net_5d"] > 0).values           # 5日大单累计为正
+    fm["fund_super_large_in"] = ((fm["super_net"] > 0) & (fm["large_net"] > 0)).values  # 超大+大单双流入
+    fm["fund_in_price_dn"] = ((fm["main_net"] > 0) & (pd.Series(fm["close"]).diff() < 0)).values  # 主力流入但价跌(吸筹)
+    return fm
 
 
 # ═══════════════════════════════════════════════
@@ -283,6 +331,14 @@ CONDITIONS = {
     "fund_super_in":_mk_cond(lambda f: f["super_net"] > 0),
     "fund_large_in":_mk_cond(lambda f: f["large_net"] > 0),
     "fund_strong":  _mk_cond(lambda f: f["main_net"] > f["amount_mean"] * 0.02),
+    # ── 资金流深化（2026-08-27 大单净流入方向）──
+    "fund_large_strong": _mk_cond(lambda f: f["fund_large_strong"]),
+    "fund_super_strong": _mk_cond(lambda f: f["fund_super_strong"]),
+    "fund_5d_pos":       _mk_cond(lambda f: f["fund_5d_pos"]),
+    "fund_super_5d_pos": _mk_cond(lambda f: f["fund_super_5d_pos"]),
+    "fund_large_5d_pos": _mk_cond(lambda f: f["fund_large_5d_pos"]),
+    "fund_super_large_in": _mk_cond(lambda f: f["fund_super_large_in"]),
+    "fund_in_price_dn":  _mk_cond(lambda f: f["fund_in_price_dn"]),
     # ── 均线扩展（2026-08-27 深挖新增）──
     "close_above_ma5":  _mk_cond(lambda f: f["close_above_ma5"]),
     "close_above_ma10": _mk_cond(lambda f: f["close_above_ma10"]),
@@ -330,6 +386,24 @@ CONDITIONS = {
     "gap_up":          _mk_cond(lambda f: f["gap_up"]),
     "gap_down":        _mk_cond(lambda f: f["gap_down"]),
     "low_break":       _mk_cond(lambda f: f["low_break"]),
+    # ── 背离类（2026-08-27 补全）──
+    "rsi_bull_div":    _mk_cond(lambda f: f["rsi_bull_div"]),
+    "macd_bull_div":   _mk_cond(lambda f: f["macd_bull_div"]),
+    "vol_bear_div":    _mk_cond(lambda f: f["vol_bear_div"]),
+    # ── 波动结构 ──
+    "atr_squeeze":     _mk_cond(lambda f: f["atr_squeeze"]),
+    "bb_squeeze":      _mk_cond(lambda f: f["bb_squeeze"]),
+    "bb_squeeze_break":_mk_cond(lambda f: f["bb_squeeze_break"]),
+    "vol_expand":      _mk_cond(lambda f: f["vol_expand"]),
+    # ── 均线深化（葛兰碧）──
+    "ma20_support":    _mk_cond(lambda f: f["ma20_support"]),
+    "ma20_reclaim":    _mk_cond(lambda f: f["ma20_reclaim"]),
+    "close_near_ma20": _mk_cond(lambda f: f["close_near_ma20"]),
+    # ── 连阴/连续形态 ──
+    "consec_down1":    _mk_cond(lambda f: f["consec_down"] >= 1),
+    "consec_down2":    _mk_cond(lambda f: f["consec_down"] >= 2),
+    "vol_surge_long":  _mk_cond(lambda f: f["vol_surge_long"]),
+    "vol_shrink_pullback": _mk_cond(lambda f: f["vol_shrink_pullback"]),
 }
 
 
@@ -407,6 +481,7 @@ def backtest_stock2(code, name="", hold_bars=8, win_pct=1.0, start="20260101"):
     f["super_net"] = super_net
     f["large_net"] = large_net
     f["amount_mean"] = np.where(amount_mean > 0, amount_mean, 1.0)
+    f = add_fund_features(f, df["close"].values, df["volume"].values)
 
     win1, win2, gain = label_wins(df["high"].values, df["close"].values, df["date"].tolist(), hold_bars, win_pct)
     return f, win1, win2, gain

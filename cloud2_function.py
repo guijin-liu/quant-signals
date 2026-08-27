@@ -11,7 +11,7 @@ import requests
 import em_client
 import mx_fetcher
 from fixed_pool_2 import FIXED_POOL_2, FIXED_POOL_DATE
-from backtest_miner2 import compute_feature_matrix, CONDITIONS
+from backtest_miner2 import compute_feature_matrix, CONDITIONS, add_fund_features
 from fund_eval import fund_eval
 
 APP_NAME = "刘圭金2号量化程序"
@@ -151,6 +151,7 @@ def scan_once(all_stocks, rules):
             if "amount_mean" not in fm.columns:  # 腾讯K线无成交额列，用 close*volume*100(手) 估算
                 est = df["close"].values * df["volume"].values * 100
                 fm["amount_mean"] = pd.Series(est).rolling(20, min_periods=1).mean().values
+            fm = add_fund_features(fm, df["close"].values, df["volume"].values)
             # 最新主力净流入（对齐最后bar日期；无则取fund最新：妙想降序[0]/新浪升序[-1]）
             main_net = 0
             last_d = dates[-1] if dates else ""
