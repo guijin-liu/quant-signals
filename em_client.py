@@ -239,6 +239,34 @@ def em_fund_flow_120d(code: str) -> list:
         return []
 
 
+def em_fund_flow_sina(code: str) -> list:
+    """新浪日级主力资金流（非东财系兜底，妙想额度不足/东财被拒时用）。
+    返回 [{date, main_net, small_net, mid_net, large_net, super_net}] 单位元，**升序（最新在后）**。
+    接口: vip.stock.finance.sina.com.cn MoneyFlow.ssl_qsfx_lscjfb (num=4000 一次全量 2010~今)
+    字段映射: netamount→main_net, r0_net→super_net, r1_net→large_net, r2_net→mid_net, r3_net→small_net"""
+    daima = f"sh{code}" if code.startswith(("6", "9")) else f"sz{code}"
+    url = "https://vip.stock.finance.sina.com.cn/quotes_service/api/json_v2.php/MoneyFlow.ssl_qsfx_lscjfb"
+    params = {"daima": daima, "num": "4000"}
+    headers = {"Referer": "https://finance.sina.com.cn"}
+    try:
+        r = requests.get(url, params=params, headers=headers, timeout=15)
+        data = r.json()
+        rows = []
+        for it in data:
+            rows.append({
+                "date": str(it.get("opendate", ""))[:10],
+                "main_net": float(it.get("netamount", 0) or 0),
+                "small_net": float(it.get("r3_net", 0) or 0),
+                "mid_net": float(it.get("r2_net", 0) or 0),
+                "large_net": float(it.get("r1_net", 0) or 0),
+                "super_net": float(it.get("r0_net", 0) or 0),
+            })
+        return rows
+    except Exception as e:
+        logger.error(f"fund_sina({code}): {e}")
+        return []
+
+
 def em_fund_flow_minute(code: str) -> list:
     """分钟级主力资金流（当日盘中）。返回 [{time,main_net,small_net,mid_net,large_net,super_net}] 单位元"""
     params = {

@@ -15,7 +15,7 @@ from backtest_miner2 import compute_feature_matrix, CONDITIONS
 from fund_eval import fund_eval
 
 APP_NAME = "刘圭金2号量化程序"
-PUSHPLUS_TOKEN = "f3fb5c092ba34785b6857bb45d23d4fa"
+PUSHPLUS_TOKEN = os.environ.get("PUSHPLUS_TOKEN", "f3fb5c092ba34785b6857bb45d23d4fa")
 PUSHPLUS_URL = "http://www.pushplus.plus/send"
 WX_WEBHOOK = os.environ.get("WX_WEBHOOK", "")
 BEIJING_TZ = timezone(timedelta(hours=8))
@@ -73,8 +73,17 @@ def bj_now():
     return datetime.now(BEIJING_TZ)
 
 
+# A股 2026 法定节假日（简易表，按官方安排核对；周末已由 weekday 排除）
+HOLIDAYS_2026 = {"0101", "0216", "0217", "0218", "0219", "0220", "0223",
+                 "0406", "0501", "0504", "0505", "0506",
+                 "0619", "0925", "1001", "1002", "1005", "1006", "1007"}
+
+
 def is_trading_day():
-    return bj_now().weekday() < 5
+    now = bj_now()
+    if now.weekday() >= 5:
+        return False
+    return now.strftime("%m%d") not in HOLIDAYS_2026
 
 
 def market_state():
@@ -96,7 +105,7 @@ def load_rules():
 
 
 def scan_once(all_stocks, rules):
-    """对动态池每票：腾讯15minK线 → 特征矩阵末行 → 命中规则 → 记录信号"""
+    """对固定池每票：腾讯15minK线 → 特征矩阵+真实资金流覆盖 → 命中规则 → 记录信号"""
     results = []
     for code, name in all_stocks.items():
         try:
@@ -107,22 +116,51 @@ def scan_once(all_stocks, rules):
                                         df["low"].values, df["volume"].values)
             if fm.empty:
                 continue
+            # ── 真实资金流覆盖（妙想优先 → 新浪兜底，非东财系）──
+            fund = mx_fetcher.mx_fund_flow(code, name)
+            if not fund:
+                fund = em_client.em_fund_flow_sina(code)
+            fund_by_date = {}
+            for d in fund:
+                fd = str(d.get("date"))[:10]
+                if len(fd) == 8 and "-" not in fd:
+                    fd = f"{fd[:4]}-{fd[4:6]}-{fd[6:8]}"
+                fund_by_date[fd] = d
+
+            def _norm(d):
+                s = str(d)[:10]
+                if len(s) == 8 and "-" not in s:
+                    s = f"{s[:4]}-{s[4:6]}-{s[6:8]}"
+                return s
+            dates = [_norm(d) for d in df["date"].tolist()]
+            fm["main_net"] = np.array([fund_by_date.get(d, {}).get("main_net", 0) for d in dates])
+            fm["super_net"] = np.array([fund_by_date.get(d, {}).get("super_net", 0) for d in dates])
+            fm["large_net"] = np.array([fund_by_date.get(d, {}).get("large_net", 0) for d in dates])
+            if "amount_mean" not in fm.columns:  # 腾讯K线无成交额列，用 close*volume*100(手) 估算
+                est = df["close"].values * df["volume"].values * 100
+                fm["amount_mean"] = pd.Series(est).rolling(20, min_periods=1).mean().values
+            # 最新主力净流入（对齐最后bar日期；无则取fund最新：妙想降序[0]/新浪升序[-1]）
+            main_net = 0
+            last_d = dates[-1] if dates else ""
+            v = fund_by_date.get(last_d)
+            if v is not None:
+                main_net = v.get("main_net", 0)
+            elif fund:
+                f0 = str(fund[0].get("date"))[:10]
+                fl = str(fund[-1].get("date"))[:10]
+                main_net = fund[0]["main_net"] if f0 > fl else fund[-1]["main_net"]
             for rule in rules:
                 conds = rule.get("conditions", [])
                 try:
                     bools = {cn: CONDITIONS[cn](fm) for cn in conds}
                     hit = all(bool(c) for cn in conds for c in [bools[cn].iloc[-1]])
                 except Exception as e:
-                    logger.warning(f"规则判定异常 {code}: {e}")
+                    logger.warning(f"规则判定异常 {code} {name}: {e}")
                     continue
                 if not hit:
                     continue
                 # 资金流确认（仅午盘后启用，避免半天数据误判）
-                main_net = 0
-                if bj_now().hour >= 13:
-                    fund = mx_fetcher.mx_fund_flow(code, name)  # 妙想个人API（东财分钟级被拒时兜底，日级主力净流入）
-                    main_net = fund[0]["main_net"] if fund else 0  # 妙想降序(最新在前)，[0]=最新交易日
-                if rule.get("fund_required") and main_net <= 0:
+                if rule.get("fund_required") and bj_now().hour >= 13 and main_net <= 0:
                     logger.info(f"{code}{name} 命中规则但主力净流出({main_net/1e4:.0f}万)，拦截")
                     continue
                 close = float(fm["close"].iloc[-1])

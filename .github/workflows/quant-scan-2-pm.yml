@@ -27,6 +27,7 @@ jobs:
       - name: 2号下午盘扫描（13:00→15:00）
         env:
           MX_APIKEY: ${{ secrets.MX_APIKEY }}
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
           SCAN_DEADLINE: "15:00"
         run: python cloud2_function.py
 
@@ -35,4 +36,4 @@ jobs:
         run: |
           curl -s -X POST http://www.pushplus.plus/send \
             -H "Content-Type: application/json" \
-            -d '{"token":"f3fb5c092ba34785b6857bb45d23d4fa","title":"🚨 刘圭金2号扫描故障(下午)","content":"<div style=\"color:#e74c3c;padding:15px\"><h2>GitHub Actions 2号下午扫描失败</h2><p>时间: '"$(TZ='Asia/Shanghai' date +'%m/%d %H:%M')"'</p></div>","template":"html"}'
+            -d '{"token":"${{ secrets.PUSHPLUS_TOKEN }}","title":"🚨 刘圭金2号扫描故障(下午)","content":"<div style=\"color:#e74c3c;padding:15px\"><h2>GitHub Actions 2号下午扫描失败</h2><p>时间: '"$(TZ='Asia/Shanghai' date +'%m/%d %H:%M')"'</p></div>","template":"html"}'

@@ -260,6 +260,8 @@ def backtest_stock2(code, name="", hold_bars=8, win_pct=1.0, start="20260101"):
     if not fund and name:  # 东财资金流空 → 妙想兜底（近120交易日）
         import mx_fetcher
         fund = mx_fetcher.mx_fund_flow(code, name)
+    if not fund:  # 妙想额度不足/被拒 → 新浪兜底（非东财系，2026-08-27 新增）
+        fund = em_client.em_fund_flow_sina(code)
     fund_by_date = {r["date"]: r for r in fund}
 
     f = compute_feature_matrix(df["close"].values, df["high"].values,
