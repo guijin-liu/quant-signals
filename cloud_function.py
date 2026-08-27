@@ -5,6 +5,7 @@ import os, sys, json, logging, requests, time, re
 import numpy as np, pandas as pd
 from datetime import datetime, timedelta, timezone
 
+import em_client
 import mx_fetcher
 from stock_pool import STOCK_POOL, STOCK_PARAMS, DEFAULT_SELL_PCT
 from fund_eval import fund_eval
@@ -14,7 +15,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger()
 
 APP_NAME = "刘圭金1号量化程序"
-PUSHPLUS_TOKEN = "f3fb5c092ba34785b6857bb45d23d4fa"
+PUSHPLUS_TOKEN = os.environ.get("PUSHPLUS_TOKEN", "f3fb5c092ba34785b6857bb45d23d4fa")
 PUSHPLUS_URL = "http://www.pushplus.plus/send"
 WX_WEBHOOK = os.environ.get("WX_WEBHOOK", "")  # 企业微信群机器人 webhook（本地推送用）
 DEEPSEEK_KEY = os.environ.get("DEEPSEEK_KEY", "")
@@ -82,8 +83,17 @@ def push_msg(title, content, retries=3):
 def bj_now():
     return datetime.now(BEIJING_TZ)
 
+# A股 2026 法定节假日（简易表，按官方安排核对；周末已由 weekday 排除）
+HOLIDAYS_2026 = {"0101", "0216", "0217", "0218", "0219", "0220", "0223",
+                 "0406", "0501", "0504", "0505", "0506",
+                 "0619", "0925", "1001", "1002", "1005", "1006", "1007"}
+
+
 def is_trading_day():
-    return bj_now().weekday() < 5
+    now = bj_now()
+    if now.weekday() >= 5:
+        return False
+    return now.strftime("%m%d") not in HOLIDAYS_2026
 
 def market_state():
     """返回市场状态: pre(盘前) / morning(上午盘) / lunch(午休) / afternoon(下午盘) / closed(已收盘)"""
@@ -211,7 +221,7 @@ def score_sell(f15, predicted_gain_pct):
 _FUND_CACHE = {"date": "", "data": None}
 
 def _get_funds(all_stocks):
-    """主力资金流字典 {code: rows}，按天缓存；异常返回空"""
+    """主力资金流字典 {code: rows}，按天缓存；妙想→新浪兜底（非东财系），统一最新在前"""
     today = bj_now().strftime("%Y%m%d")
     if _FUND_CACHE["date"] == today and _FUND_CACHE["data"] is not None:
         return _FUND_CACHE["data"]
@@ -219,6 +229,13 @@ def _get_funds(all_stocks):
     for code, name in all_stocks.items():
         try:
             rows = mx_fetcher.mx_fund_flow(code, name)
+            if not rows:
+                rows = em_client.em_fund_flow_sina(code)  # 新浪兜底（升序）
+            if rows:
+                f0 = str(rows[0].get("date", ""))[:10]
+                fl = str(rows[-1].get("date", ""))[:10]
+                if f0 < fl:  # 升序 → 反转成最新在前（score_buy 用 fund[:5]）
+                    rows = rows[::-1]
             funds[code] = rows if rows else []
         except Exception:
             funds[code] = []

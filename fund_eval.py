@@ -7,6 +7,7 @@ fund_eval(code, name) → 资金面评估短文本：
 import requests
 from datetime import datetime, timedelta
 import mx_fetcher
+import em_client
 
 DATACENTER_URL = "https://datacenter-web.eastmoney.com/api/data/v1/get"
 
@@ -30,6 +31,13 @@ def fund_eval(code: str, name: str) -> str:
     """返回主力资金+机构评估短文本；异常时返回空串"""
     try:
         rows = mx_fetcher.mx_fund_flow(code, name)
+        if not rows:
+            rows = em_client.em_fund_flow_sina(code)  # 新浪兜底（非东财系）
+        if rows:
+            f0 = str(rows[0].get("date", ""))[:10]
+            fl = str(rows[-1].get("date", ""))[:10]
+            if f0 < fl:  # 新浪升序 → 反转成最新在前
+                rows = rows[::-1]
         if not rows:
             return "主力资金-"
         r5 = sum(x["main_net"] for x in rows[:5]) / 1e8
