@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 
 import em_client
-from dynamic_pool import load_pool_window
+# 注: dynamic_pool.load_pool_window 已弃用（2号改用固定池 FIXED_POOL_2），移除顶层 import 以免云函数缺文件
 
 logger = logging.getLogger(__name__)
 
