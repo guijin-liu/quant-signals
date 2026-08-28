@@ -1,1 +1,0 @@
-{"FunctionName":"quant-scan-2","Namespace":"default","Handler":"scf_cloud2.main_handler","Code":{"CosBucketName":"quant-signals-state-1440185993","CosObjectName":"code/scf_cloud2_code.zip"}}
